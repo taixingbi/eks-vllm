@@ -2,8 +2,7 @@
 # Patch Kubernetes manifest placeholders from Terraform outputs.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TF_DIR="${ROOT}/terraform/environments/prod"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/env.sh"
 
 if ! command -v terraform >/dev/null 2>&1; then
   echo "terraform is required"
@@ -19,9 +18,10 @@ EFS_FS_ID=$(terraform output -raw efs_file_system_id)
 EFS_AP_ID=$(terraform output -raw efs_access_point_id)
 ECR_URL=$(terraform output -raw ecr_repository_url)
 CW_ROLE_ARN=$(terraform output -raw cloudwatch_agent_role_arn)
+ACM_CERTIFICATE_ARN="${ACM_CERTIFICATE_ARN:-}"
+INFERENCE_HOSTNAME="${INFERENCE_HOSTNAME:-inference.example.com}"
 
-TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
+mkdir -p "${OUT_DIR}/karpenter" "${OUT_DIR}/vllm" "${OUT_DIR}/monitoring"
 
 patch_file() {
   local src=$1
@@ -36,29 +36,31 @@ patch_file() {
     "$src" > "$dst"
 }
 
-mkdir -p "${TMP}/karpenter" "${TMP}/vllm" "${TMP}/monitoring"
+patch_ingress() {
+  local src=$1
+  local dst=$2
+  sed \
+    -e "s|ACM_CERTIFICATE_ARN|${ACM_CERTIFICATE_ARN}|g" \
+    -e "s|inference.example.com|${INFERENCE_HOSTNAME}|g" \
+    "$src" > "$dst"
+}
 
-patch_file "${ROOT}/kubernetes/karpenter/ec2nodeclass-g5.yaml" "${TMP}/karpenter/ec2nodeclass-g5.yaml"
-cp "${ROOT}/kubernetes/karpenter/nodepool-g5-ondemand.yaml" "${TMP}/karpenter/"
-cp "${ROOT}/kubernetes/karpenter/nodepool-g5-spot.yaml" "${TMP}/karpenter/"
+patch_file "${ROOT}/kubernetes/karpenter/ec2nodeclass-g5.yaml" "${OUT_DIR}/karpenter/ec2nodeclass-g5.yaml"
+cp "${ROOT}/kubernetes/karpenter/nodepool-g5-ondemand.yaml" "${OUT_DIR}/karpenter/"
+cp "${ROOT}/kubernetes/karpenter/nodepool-g5-spot.yaml" "${OUT_DIR}/karpenter/"
 
-patch_file "${ROOT}/kubernetes/vllm/pvc-efs.yaml" "${TMP}/vllm/pvc-efs.yaml"
-patch_file "${ROOT}/kubernetes/vllm/deployment.yaml" "${TMP}/vllm/deployment.yaml"
-patch_file "${ROOT}/kubernetes/monitoring/cloudwatch-agent.yaml" "${TMP}/monitoring/cloudwatch-agent.yaml"
+patch_file "${ROOT}/kubernetes/vllm/pvc-efs.yaml" "${OUT_DIR}/vllm/pvc-efs.yaml"
+patch_file "${ROOT}/kubernetes/vllm/deployment.yaml" "${OUT_DIR}/vllm/deployment.yaml"
+patch_ingress "${ROOT}/kubernetes/vllm/ingress.yaml" "${OUT_DIR}/vllm/ingress.yaml"
+patch_file "${ROOT}/kubernetes/monitoring/cloudwatch-agent.yaml" "${OUT_DIR}/monitoring/cloudwatch-agent.yaml"
 
-cp "${ROOT}/kubernetes/vllm/namespace.yaml" "${TMP}/vllm/"
-cp "${ROOT}/kubernetes/vllm/configmap.yaml" "${TMP}/vllm/"
-cp "${ROOT}/kubernetes/vllm/service.yaml" "${TMP}/vllm/"
-cp "${ROOT}/kubernetes/vllm/ingress.yaml" "${TMP}/vllm/"
-cp "${ROOT}/kubernetes/vllm/keda-scaledobject.yaml" "${TMP}/vllm/"
-cp "${ROOT}/kubernetes/gpu/nvidia-device-plugin.yaml" "${TMP}/"
-cp "${ROOT}/kubernetes/monitoring/namespace.yaml" "${TMP}/monitoring/"
-cp "${ROOT}/kubernetes/monitoring/servicemonitor.yaml" "${TMP}/monitoring/"
-cp "${ROOT}/kubernetes/monitoring/prometheus-rules.yaml" "${TMP}/monitoring/"
+cp "${ROOT}/kubernetes/vllm/namespace.yaml" "${OUT_DIR}/vllm/"
+cp "${ROOT}/kubernetes/vllm/configmap.yaml" "${OUT_DIR}/vllm/"
+cp "${ROOT}/kubernetes/vllm/service.yaml" "${OUT_DIR}/vllm/"
+cp "${ROOT}/kubernetes/vllm/keda-scaledobject.yaml" "${OUT_DIR}/vllm/"
+cp "${ROOT}/kubernetes/gpu/nvidia-device-plugin.yaml" "${OUT_DIR}/"
+cp "${ROOT}/kubernetes/monitoring/namespace.yaml" "${OUT_DIR}/monitoring/"
+cp "${ROOT}/kubernetes/monitoring/servicemonitor.yaml" "${OUT_DIR}/monitoring/"
+cp "${ROOT}/kubernetes/monitoring/prometheus-rules.yaml" "${OUT_DIR}/monitoring/"
 
-echo "Patched manifests written to ${TMP}"
-echo "Apply with:"
-echo "  kubectl apply -f ${TMP}/karpenter/"
-echo "  kubectl apply -f ${TMP}/nvidia-device-plugin.yaml"
-echo "  kubectl apply -f ${TMP}/vllm/"
-echo "  kubectl apply -f ${TMP}/monitoring/"
+echo "Patched manifests written to ${OUT_DIR} (${TF_ENVIRONMENT})"

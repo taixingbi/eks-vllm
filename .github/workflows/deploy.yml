@@ -1,0 +1,115 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy
+        required: true
+        default: prod
+        type: choice
+        options:
+          - dev
+          - prod
+
+permissions:
+  contents: read
+
+jobs:
+  resolve-environment:
+    name: Resolve environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.resolve.outputs.environment }}
+    steps:
+      - id: resolve
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            ENV="${{ github.event.inputs.environment }}"
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            ENV="prod"
+          elif [[ "${{ github.ref }}" == "refs/heads/dev" ]]; then
+            ENV="dev"
+          else
+            echo "Unsupported ref: ${{ github.ref }}"
+            exit 1
+          fi
+          echo "environment=${ENV}" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Deploy (${{ needs.resolve-environment.outputs.environment }})
+    needs: resolve-environment
+    runs-on: ubuntu-latest
+    environment: ${{ needs.resolve-environment.outputs.environment }}
+    concurrency:
+      group: deploy-${{ needs.resolve-environment.outputs.environment }}
+      cancel-in-progress: false
+    env:
+      AWS_REGION: us-east-1
+      TF_IN_AUTOMATION: true
+      TF_ENVIRONMENT: ${{ needs.resolve-environment.outputs.environment }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.6
+
+      - name: Terraform Init
+        working-directory: terraform/environments/${{ needs.resolve-environment.outputs.environment }}
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: terraform/environments/${{ needs.resolve-environment.outputs.environment }}
+        run: terraform apply -auto-approve
+
+      - name: Configure kubectl
+        run: |
+          CLUSTER_NAME=$(cd "terraform/environments/${TF_ENVIRONMENT}" && terraform output -raw cluster_name)
+          aws eks update-kubeconfig --region "${AWS_REGION}" --name "${CLUSTER_NAME}"
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Install cluster add-ons
+        run: ./scripts/install-addons.sh
+
+      - name: Sync HF token to Secrets Manager
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: ./scripts/sync-hf-secret.sh
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push vLLM image
+        env:
+          VLLM_IMAGE_TAG: v0.8.4
+        run: ./scripts/build-push-image.sh
+
+      - name: Deploy Kubernetes manifests
+        env:
+          ACM_CERTIFICATE_ARN: ${{ secrets.ACM_CERTIFICATE_ARN }}
+          INFERENCE_HOSTNAME: ${{ secrets.INFERENCE_HOSTNAME }}
+        run: ./scripts/deploy-k8s.sh
+
+      - name: Wait for vLLM rollout
+        run: |
+          kubectl rollout status deployment/vllm-qwen -n vllm --timeout=20m || true
+          kubectl get pods -n vllm
+          kubectl get nodes -l workload=gpu 2>/dev/null || true

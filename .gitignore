@@ -1,4 +1,5 @@
 .terraform/
+kubernetes/.generated/
 *.tfstate
 *.tfstate.*
 *.tfvars.local

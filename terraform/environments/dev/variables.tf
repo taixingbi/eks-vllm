@@ -1,0 +1,75 @@
+variable "aws_region" {
+  description = "AWS region"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "name_prefix" {
+  description = "Prefix for resource names"
+  type        = string
+  default     = "qwen-vllm-dev"
+}
+
+variable "cluster_name" {
+  description = "EKS cluster name"
+  type        = string
+  default     = "qwen-vllm-dev"
+}
+
+variable "cluster_version" {
+  description = "Kubernetes version"
+  type        = string
+  default     = "1.31"
+}
+
+variable "vpc_cidr" {
+  description = "VPC CIDR block"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "az_count" {
+  description = "Number of AZs"
+  type        = number
+  default     = 2
+}
+
+variable "single_nat_gateway" {
+  description = "Use single NAT gateway (false for prod HA)"
+  type        = bool
+  default     = false
+}
+
+variable "system_node_instance_types" {
+  description = "System node instance types"
+  type        = list(string)
+  default     = ["m6i.large"]
+}
+
+variable "system_node_desired_size" {
+  description = "Desired system nodes"
+  type        = number
+  default     = 2
+}
+
+variable "system_node_min_size" {
+  description = "Minimum system nodes"
+  type        = number
+  default     = 2
+}
+
+variable "system_node_max_size" {
+  description = "Maximum system nodes"
+  type        = number
+  default     = 4
+}
+
+variable "tags" {
+  description = "Default tags"
+  type        = map(string)
+  default = {
+    Project     = "qwen-vllm"
+    Environment = "dev"
+    ManagedBy   = "terraform"
+  }
+}

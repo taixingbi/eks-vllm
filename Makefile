@@ -1,25 +1,49 @@
-.PHONY: bootstrap init plan apply patch
+.PHONY: bootstrap init plan apply patch install-addons sync-hf-secret build-image deploy-k8s delete-k8s delete-addons destroy
+
+TF_ENVIRONMENT ?= prod
+TF_DIR = terraform/environments/$(TF_ENVIRONMENT)
 
 bootstrap:
 	cd terraform/bootstrap && terraform init && terraform apply
 
 init:
-	cd terraform/environments/prod && terraform init
+	cd $(TF_DIR) && terraform init
 
 plan:
-	cd terraform/environments/prod && terraform plan
+	cd $(TF_DIR) && terraform plan
 
 apply:
-	cd terraform/environments/prod && terraform apply
+	cd $(TF_DIR) && terraform apply
 
 patch:
-	./scripts/patch-manifests.sh
+	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/patch-manifests.sh
 
-kubeconfig:
-	aws eks update-kubeconfig --region us-east-1 --name qwen-vllm-prod
+install-addons:
+	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/install-addons.sh
+
+sync-hf-secret:
+	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/sync-hf-secret.sh
 
 build-image:
-	@ECR_URL=$$(cd terraform/environments/prod && terraform output -raw ecr_repository_url); \
-	aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $${ECR_URL%%/*}; \
-	docker build -t $$ECR_URL:v0.8.4 -f docker/Dockerfile.vllm .; \
-	docker push $$ECR_URL:v0.8.4
+	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/build-push-image.sh
+
+deploy-k8s:
+	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/deploy-k8s.sh
+
+delete-k8s:
+	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/delete-k8s.sh
+
+delete-addons:
+	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/delete-addons.sh
+
+destroy:
+	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/destroy.sh
+
+kubeconfig:
+	aws eks update-kubeconfig --region us-east-1 --name qwen-vllm-$(TF_ENVIRONMENT)
+
+kubeconfig-prod:
+	$(MAKE) kubeconfig TF_ENVIRONMENT=prod
+
+kubeconfig-dev:
+	$(MAKE) kubeconfig TF_ENVIRONMENT=dev

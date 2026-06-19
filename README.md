@@ -23,7 +23,9 @@ Production-ready Terraform and Kubernetes manifests for serving **Qwen3-8B** via
 terraform/
   bootstrap/          # S3 + DynamoDB for remote state (run once)
   modules/            # vpc, eks, efs, ecr, karpenter, alb-controller
-  environments/prod/  # Production stack
+  environments/
+    dev/              # Dev stack (branch: dev)
+    prod/             # Production stack (branch: main)
 kubernetes/
   karpenter/          # EC2NodeClass + On-Demand/Spot NodePools
   gpu/                # NVIDIA device plugin
@@ -35,7 +37,82 @@ scripts/
   patch-manifests.sh  # Inject Terraform outputs into manifests
 ```
 
-## Rollout Sequence
+## GitHub Actions Deploy
+
+| Branch | Environment | Cluster | Terraform path |
+|---|---|---|---|
+| `dev` | dev | `qwen-vllm-dev` | `terraform/environments/dev` |
+| `main` | prod | `qwen-vllm-prod` | `terraform/environments/prod` |
+
+Push to `dev` or `main` to deploy automatically. You can also run **Actions → Deploy → Run workflow** and pick the environment.
+
+Create GitHub **Environments** named `dev` and `prod` (Settings → Environments) so each can have its own `ACM_CERTIFICATE_ARN` and `INFERENCE_HOSTNAME`.
+
+### Required repository secrets
+
+| Secret | Purpose |
+|---|---|
+| `AWS_ACCESS_KEY_ID` | IAM user for Terraform + EKS + ECR |
+| `AWS_SECRET_ACCESS_KEY` | IAM secret key |
+| `HF_TOKEN` | HuggingFace token (synced to Secrets Manager) |
+
+### Per-environment secrets (dev / prod environments)
+
+| Secret | Purpose |
+|---|---|
+| `ACM_CERTIFICATE_ARN` | ACM cert ARN for HTTPS ingress |
+| `INFERENCE_HOSTNAME` | Public hostname (e.g. `dev.inference.example.com`) |
+
+HF tokens are stored per environment:
+- **prod:** `qwen-vllm/hf-token`
+- **dev:** `qwen-vllm-dev/hf-token`
+
+The IAM user needs permissions for Terraform (VPC, EKS, EFS, ECR, IAM, etc.), ECR push, Secrets Manager, and `eks:DescribeCluster`.
+
+### What the deploy workflow does
+
+1. `terraform apply` in `terraform/environments/<env>`
+2. Install Helm add-ons (EFS CSI, External Secrets, KEDA, Prometheus)
+3. Sync `HF_TOKEN` → AWS Secrets Manager
+4. Build and push vLLM image to ECR
+5. Patch and apply Kubernetes manifests
+
+Pull requests targeting `dev` or `main` that touch `terraform/**` run `terraform plan` for the matching environment.
+
+### Local teardown
+
+Remove workloads only (keeps EKS cluster and Terraform infrastructure):
+
+```bash
+make delete-k8s TF_ENVIRONMENT=dev    # or prod
+```
+
+Uninstall Helm add-ons (EFS CSI, External Secrets, KEDA, Prometheus):
+
+```bash
+make delete-addons TF_ENVIRONMENT=dev
+```
+
+Destroy everything for an environment (Kubernetes → Helm → `terraform destroy`):
+
+```bash
+make destroy TF_ENVIRONMENT=dev
+```
+
+Each command prompts for confirmation by typing the environment name (`dev` or `prod`). Skip prompts with `AUTO_APPROVE=1`.
+
+Bootstrap state (`terraform/bootstrap`) is not removed by `destroy` — the S3 bucket has `prevent_destroy` enabled.
+
+### One-time bootstrap (still manual)
+
+Remote Terraform state must exist before the first GitHub deploy:
+
+```bash
+cd terraform/bootstrap
+terraform init && terraform apply
+```
+
+## Rollout Sequence (local alternative)
 
 ### 1. Bootstrap Terraform state
 
@@ -207,8 +284,8 @@ Optional ALB fallback scaler: `kubernetes/vllm/keda-scaledobject-alb-fallback.ya
 - **GPU quota:** request `g5.4xlarge` increase before deploy
 - **ALB timeout:** 300s idle timeout configured; match client timeouts
 
-## CI Recommendations
+## CI
 
-- `terraform plan` on PR for `terraform/environments/prod`
-- `kubectl diff` for manifest changes after patching
+- **Deploy:** `.github/workflows/deploy.yml` — `dev` branch → dev, `main` branch → prod
+- **Plan:** `.github/workflows/terraform-plan.yml` — `terraform plan` on PRs to `dev` or `main`
 - Pin vLLM image tag in ECR; scan on push enabled
