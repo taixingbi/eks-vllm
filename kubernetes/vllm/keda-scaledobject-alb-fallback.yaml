@@ -1,0 +1,39 @@
+# Optional fallback scaler using ALB request count when Prometheus is unavailable.
+# Apply only one ScaledObject per Deployment — disable keda-scaledobject.yaml if using this.
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: aws-cloudwatch
+  namespace: vllm
+spec:
+  podIdentity:
+    provider: aws
+
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: vllm-qwen-alb-fallback
+  namespace: vllm
+spec:
+  scaleTargetRef:
+    name: vllm-qwen
+  pollingInterval: 60
+  cooldownPeriod: 300
+  minReplicaCount: 2
+  maxReplicaCount: 10
+  triggers:
+    - type: aws-cloudwatch
+      authenticationRef:
+        name: aws-cloudwatch
+      metadata:
+        namespace: AWS/ApplicationELB
+        metricName: RequestCountPerTarget
+        dimensionName: LoadBalancer;TargetGroup
+        dimensionValue: REPLACE_ALB_ARN_SUFFIX;REPLACE_TG_ARN_SUFFIX
+        targetMetricValue: "100"
+        minMetricValue: "0"
+        awsRegion: us-east-1
+        metricStat: Sum
+        metricStatPeriod: "60"
+        metricCollectionTime: "120"

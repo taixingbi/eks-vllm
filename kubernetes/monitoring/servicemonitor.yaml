@@ -1,0 +1,20 @@
+# Requires Prometheus Operator (kube-prometheus-stack) installed in monitoring namespace.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: vllm-qwen
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames:
+      - vllm
+  selector:
+    matchLabels:
+      app: vllm-qwen
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s

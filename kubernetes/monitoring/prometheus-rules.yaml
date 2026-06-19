@@ -1,0 +1,59 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: vllm-qwen-alerts
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: vllm-qwen
+      rules:
+        - alert: VLLMPodNotReady
+          expr: |
+            kube_pod_status_ready{namespace="vllm", pod=~"vllm-qwen-.*", condition="true"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "vLLM pod not ready for 5+ minutes"
+            description: "Pod {{ $labels.pod }} in namespace vllm is not ready."
+
+        - alert: VLLMHighGPUCacheUsage
+          expr: avg(vllm:gpu_cache_usage_perc{namespace="vllm"}) > 95
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "vLLM GPU cache usage above 95%"
+            description: "Average GPU cache usage is {{ $value }}% — consider scaling replicas."
+
+        - alert: VLLMHighRequestQueue
+          expr: sum(vllm:num_requests_waiting{namespace="vllm"}) > 10
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "vLLM request queue depth high"
+            description: "{{ $value }} requests waiting — scale-out may be needed."
+
+        - alert: VLLMHighP99Latency
+          expr: |
+            histogram_quantile(0.99,
+              sum(rate(vllm:e2e_request_latency_seconds_bucket{namespace="vllm"}[5m])) by (le)
+            ) > 30
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "vLLM p99 latency exceeds 30s"
+            description: "p99 end-to-end latency is {{ $value }}s."
+
+        - alert: KarpenterSpotInterruptionRate
+          expr: increase(karpenter_interruption_received_messages_total[15m]) > 3
+          for: 5m
+          labels:
+            severity: info
+          annotations:
+            summary: "Elevated Spot interruption rate"
+            description: "Multiple Spot interruptions in the last 15 minutes."

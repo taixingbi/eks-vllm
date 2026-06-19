@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vllm-config
+  namespace: vllm
+data:
+  MODEL_ID: "Qwen/Qwen3-8B"
+  MODEL_PATH: "/models/Qwen3-8B"
+  VLLM_HOST: "0.0.0.0"
+  VLLM_PORT: "8000"
+  DTYPE: "bfloat16"
+  MAX_MODEL_LEN: "8192"
+  GPU_MEMORY_UTILIZATION: "0.90"

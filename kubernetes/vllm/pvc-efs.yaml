@@ -1,0 +1,31 @@
+# Replace FILE_SYSTEM_ID and ACCESS_POINT_ID from terraform outputs.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: efs-models
+provisioner: efs.csi.aws.com
+parameters:
+  provisioningMode: efs-ap
+  fileSystemId: FILE_SYSTEM_ID
+  accessPointId: ACCESS_POINT_ID
+  directoryPerms: "755"
+  gidRangeStart: "1000"
+  gidRangeEnd: "2000"
+  basePath: "/models"
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: model-cache
+  namespace: vllm
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: efs-models
+  resources:
+    requests:
+      storage: 50Gi

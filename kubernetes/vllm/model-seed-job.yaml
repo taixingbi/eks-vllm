@@ -1,0 +1,53 @@
+# One-time job to pre-seed model weights on EFS before rolling out vLLM.
+# Requires hf-token secret in vllm namespace.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: model-seed
+  namespace: vllm
+spec:
+  ttlSecondsAfterFinished: 86400
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: download
+          image: huggingface/huggingface_hub:0.26.2
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token
+                  key: token
+                  optional: true
+            - name: MODEL_ID
+              value: Qwen/Qwen3-8B
+            - name: MODEL_PATH
+              value: /models/Qwen3-8B
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              if [ -f "${MODEL_PATH}/config.json" ]; then
+                echo "Model already present."
+                exit 0
+              fi
+              huggingface-cli download "${MODEL_ID}" \
+                --local-dir "${MODEL_PATH}" \
+                --local-dir-use-symlinks False
+          volumeMounts:
+            - name: model-cache
+              mountPath: /models
+          resources:
+            requests:
+              cpu: "2"
+              memory: 4Gi
+            limits:
+              cpu: "4"
+              memory: 8Gi
+      volumes:
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: model-cache

@@ -1,0 +1,11 @@
+# Pin vLLM version for Qwen3-8B support.
+# Build: docker build -t $ECR_REPO:v0.8.4 -f docker/Dockerfile.vllm .
+FROM vllm/vllm-openai:v0.8.4
+
+# Optional: pre-install common dependencies or bake model config
+ENV VLLM_WORKER_MULTIPROC_METHOD=spawn
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=300s --retries=3 \
+  CMD curl -f http://localhost:8000/health || exit 1
+
+EXPOSE 8000

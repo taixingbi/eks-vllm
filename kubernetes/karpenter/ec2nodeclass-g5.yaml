@@ -1,0 +1,47 @@
+# Replace placeholders after terraform apply:
+#   CLUSTER_NAME          -> terraform output cluster_name
+#   KARPENTER_NODE_ROLE   -> terraform output karpenter_node_role_arn (name only for role)
+#   INSTANCE_PROFILE      -> terraform output karpenter_instance_profile_name
+#   SUBNET_SELECTOR       -> private subnet IDs (tagged with karpenter.sh/discovery)
+#   SECURITY_GROUP_ID     -> EKS node security group from terraform output
+#   INTERRUPTION_QUEUE    -> terraform output karpenter_interruption_queue_name
+
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: g5-gpu
+spec:
+  amiFamily: AL2023
+  role: KARPENTER_NODE_ROLE_NAME
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: CLUSTER_NAME
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: CLUSTER_NAME
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 100Gi
+        volumeType: gp3
+        encrypted: true
+        deleteOnTermination: true
+  metadataOptions:
+    httpEndpoint: enabled
+    httpProtocolIPv6: disabled
+    httpPutResponseHopLimit: 2
+    httpTokens: required
+  userData: |
+    MIME-Version: 1.0
+    Content-Type: multipart/mixed; boundary="BOUNDARY"
+
+    --BOUNDARY
+    Content-Type: text/x-shellscript; charset="us-ascii"
+
+    #!/bin/bash
+    /etc/eks/bootstrap.sh CLUSTER_NAME
+
+    --BOUNDARY--
+  tags:
+    Project: qwen-vllm
+    NodePool: g5-gpu

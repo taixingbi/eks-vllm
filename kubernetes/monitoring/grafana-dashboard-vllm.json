@@ -1,0 +1,105 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "Request Rate",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(vllm:request_success_total{namespace=\"vllm\"}[5m]))",
+          "legendFormat": "success"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percentunit" } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "title": "GPU Cache Usage",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "avg(vllm:gpu_cache_usage_perc{namespace=\"vllm\"})",
+          "legendFormat": "gpu cache %"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "title": "Running / Waiting Requests",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(vllm:num_requests_running{namespace=\"vllm\"})",
+          "legendFormat": "running"
+        },
+        {
+          "expr": "sum(vllm:num_requests_waiting{namespace=\"vllm\"})",
+          "legendFormat": "waiting"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 4,
+      "title": "Time to First Token (p99)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(vllm:time_to_first_token_seconds_bucket{namespace=\"vllm\"}[5m])) by (le))",
+          "legendFormat": "p99 TTFT"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "tok/s" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "id": 5,
+      "title": "Generation Throughput",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(vllm:generation_tokens_total{namespace=\"vllm\"}[5m]))",
+          "legendFormat": "tokens/sec"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "id": 6,
+      "title": "vLLM Pod Replicas",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "count(kube_pod_info{namespace=\"vllm\", pod=~\"vllm-qwen-.*\"})",
+          "legendFormat": "replicas"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["vllm", "qwen", "gpu"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "Qwen vLLM on EKS",
+  "uid": "qwen-vllm-eks",
+  "version": 1
+}
