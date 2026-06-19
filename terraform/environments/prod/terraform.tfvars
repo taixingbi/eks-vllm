@@ -1,7 +1,7 @@
 aws_region                 = "us-east-1"
 name_prefix                = "qwen-vllm"
 cluster_name               = "qwen-vllm-prod"
-cluster_version            = "1.29"
+cluster_version            = "1.31"
 vpc_cidr                   = "10.0.0.0/16"
 az_count                   = 2
 single_nat_gateway         = false

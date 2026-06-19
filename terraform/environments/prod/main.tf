@@ -48,17 +48,6 @@ module "ecr" {
   tags = var.tags
 }
 
-module "karpenter" {
-  source = "../../modules/karpenter"
-
-  cluster_name      = module.eks.cluster_name
-  cluster_endpoint  = module.eks.cluster_endpoint
-  oidc_provider_arn = module.eks.cluster_oidc_provider_arn
-  oidc_provider     = module.eks.oidc_provider
-
-  tags = var.tags
-}
-
 module "alb_controller" {
   source = "../../modules/alb-controller"
 
@@ -68,4 +57,17 @@ module "alb_controller" {
   oidc_provider     = module.eks.oidc_provider
 
   tags = var.tags
+}
+
+module "karpenter" {
+  source = "../../modules/karpenter"
+
+  cluster_name      = module.eks.cluster_name
+  cluster_endpoint  = module.eks.cluster_endpoint
+  oidc_provider_arn = module.eks.cluster_oidc_provider_arn
+  oidc_provider     = module.eks.oidc_provider
+
+  tags = var.tags
+
+  depends_on = [module.alb_controller]
 }
