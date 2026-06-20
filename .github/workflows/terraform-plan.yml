@@ -79,7 +79,8 @@ jobs:
             const plan = fs.existsSync(planPath)
               ? fs.readFileSync(planPath, 'utf8')
               : 'Plan failed or produced no output.';
-            const body = `#### Terraform Plan (${env}) \`${{ github.event.pull_request.head.sha.substring(0, 7) }}\`
+            const shortSha = context.payload.pull_request.head.sha.slice(0, 7);
+            const body = `#### Terraform Plan (${env}) \`${shortSha}\`
             <details><summary>Show Plan</summary>
 
             \`\`\`
