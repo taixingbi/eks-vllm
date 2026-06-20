@@ -1,4 +1,4 @@
-.PHONY: bootstrap init plan apply patch install-addons sync-hf-secret build-image deploy-k8s delete-k8s delete-addons destroy
+.PHONY: bootstrap init plan apply patch install-controllers install-addons sync-hf-secret build-image deploy-k8s delete-k8s delete-addons destroy
 
 TF_ENVIRONMENT ?= prod
 TF_DIR = terraform/environments/$(TF_ENVIRONMENT)
@@ -17,6 +17,9 @@ apply:
 
 patch:
 	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/patch-manifests.sh
+
+install-controllers:
+	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/install-controllers.sh
 
 install-addons:
 	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/install-addons.sh

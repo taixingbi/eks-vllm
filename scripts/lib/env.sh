@@ -22,3 +22,10 @@ case "${TF_ENVIRONMENT}" in
   prod) export HF_SECRET_NAME="${HF_SECRET_NAME:-qwen-vllm/hf-token}" ;;
   dev)  export HF_SECRET_NAME="${HF_SECRET_NAME:-qwen-vllm-dev/hf-token}" ;;
 esac
+
+export INSTANCE_TYPE="${INSTANCE_TYPE:-g5.4xlarge}"
+export MODEL_NAME="${MODEL_NAME:-Qwen/Qwen3-8B}"
+export MODEL_BASENAME="${MODEL_NAME##*/}"
+export MODEL_PATH="/models/${MODEL_BASENAME}"
+export INSTANCE_FAMILY="${INSTANCE_TYPE%%.*}"
+export INSTANCE_SIZE="${INSTANCE_TYPE#*.}"

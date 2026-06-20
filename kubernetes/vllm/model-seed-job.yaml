@@ -22,9 +22,9 @@ spec:
                   key: token
                   optional: true
             - name: MODEL_ID
-              value: Qwen/Qwen3-8B
+              value: MODEL_NAME
             - name: MODEL_PATH
-              value: /models/Qwen3-8B
+              value: MODEL_PATH
           command:
             - /bin/sh
             - -c

@@ -29,7 +29,7 @@ kubectl apply -f "${OUT_DIR}/nvidia-device-plugin.yaml"
 kubectl apply -f "${OUT_DIR}/vllm/configmap.yaml"
 kubectl apply -f "${OUT_DIR}/vllm/pvc-efs.yaml"
 
-kubectl apply -f "${ROOT}/kubernetes/vllm/model-seed-job.yaml"
+kubectl apply -f "${OUT_DIR}/vllm/model-seed-job.yaml"
 if ! kubectl wait --for=condition=complete job/model-seed -n vllm --timeout=3600s 2>/dev/null; then
   echo "model-seed job still running or already completed; continuing"
 fi

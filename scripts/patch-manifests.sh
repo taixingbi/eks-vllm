@@ -33,6 +33,10 @@ patch_file() {
     -e "s|ACCESS_POINT_ID|${EFS_AP_ID}|g" \
     -e "s|ECR_REPOSITORY_URL|${ECR_URL}|g" \
     -e "s|CLOUDWATCH_AGENT_ROLE_ARN|${CW_ROLE_ARN}|g" \
+    -e "s|MODEL_NAME|${MODEL_NAME}|g" \
+    -e "s|MODEL_PATH|${MODEL_PATH}|g" \
+    -e "s|INSTANCE_FAMILY|${INSTANCE_FAMILY}|g" \
+    -e "s|INSTANCE_SIZE|${INSTANCE_SIZE}|g" \
     "$src" > "$dst"
 }
 
@@ -46,16 +50,17 @@ patch_ingress() {
 }
 
 patch_file "${ROOT}/kubernetes/karpenter/ec2nodeclass-g5.yaml" "${OUT_DIR}/karpenter/ec2nodeclass-g5.yaml"
-cp "${ROOT}/kubernetes/karpenter/nodepool-g5-ondemand.yaml" "${OUT_DIR}/karpenter/"
-cp "${ROOT}/kubernetes/karpenter/nodepool-g5-spot.yaml" "${OUT_DIR}/karpenter/"
+patch_file "${ROOT}/kubernetes/karpenter/nodepool-g5-ondemand.yaml" "${OUT_DIR}/karpenter/nodepool-g5-ondemand.yaml"
+patch_file "${ROOT}/kubernetes/karpenter/nodepool-g5-spot.yaml" "${OUT_DIR}/karpenter/nodepool-g5-spot.yaml"
 
 patch_file "${ROOT}/kubernetes/vllm/pvc-efs.yaml" "${OUT_DIR}/vllm/pvc-efs.yaml"
 patch_file "${ROOT}/kubernetes/vllm/deployment.yaml" "${OUT_DIR}/vllm/deployment.yaml"
+patch_file "${ROOT}/kubernetes/vllm/configmap.yaml" "${OUT_DIR}/vllm/configmap.yaml"
+patch_file "${ROOT}/kubernetes/vllm/model-seed-job.yaml" "${OUT_DIR}/vllm/model-seed-job.yaml"
 patch_ingress "${ROOT}/kubernetes/vllm/ingress.yaml" "${OUT_DIR}/vllm/ingress.yaml"
 patch_file "${ROOT}/kubernetes/monitoring/cloudwatch-agent.yaml" "${OUT_DIR}/monitoring/cloudwatch-agent.yaml"
 
 cp "${ROOT}/kubernetes/vllm/namespace.yaml" "${OUT_DIR}/vllm/"
-cp "${ROOT}/kubernetes/vllm/configmap.yaml" "${OUT_DIR}/vllm/"
 cp "${ROOT}/kubernetes/vllm/service.yaml" "${OUT_DIR}/vllm/"
 cp "${ROOT}/kubernetes/vllm/keda-scaledobject.yaml" "${OUT_DIR}/vllm/"
 cp "${ROOT}/kubernetes/gpu/nvidia-device-plugin.yaml" "${OUT_DIR}/"
@@ -64,3 +69,6 @@ cp "${ROOT}/kubernetes/monitoring/servicemonitor.yaml" "${OUT_DIR}/monitoring/"
 cp "${ROOT}/kubernetes/monitoring/prometheus-rules.yaml" "${OUT_DIR}/monitoring/"
 
 echo "Patched manifests written to ${OUT_DIR} (${TF_ENVIRONMENT})"
+echo "  MODEL_NAME=${MODEL_NAME}"
+echo "  MODEL_PATH=${MODEL_PATH}"
+echo "  INSTANCE_TYPE=${INSTANCE_TYPE}"

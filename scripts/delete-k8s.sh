@@ -3,6 +3,7 @@
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/env.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/cluster.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/confirm.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/kubectl-delete.sh"
 AWS_REGION="${AWS_REGION:-us-east-1}"
@@ -12,11 +13,14 @@ if ! command -v kubectl >/dev/null 2>&1; then
   exit 1
 fi
 
-cd "$TF_DIR"
-CLUSTER_NAME=$(terraform output -raw cluster_name)
-aws eks update-kubeconfig --region "${AWS_REGION}" --name "${CLUSTER_NAME}" >/dev/null
-
 confirm_action "delete Kubernetes workloads"
+
+if ! CLUSTER_NAME=$(configure_kubectl); then
+  echo "Nothing to delete for ${TF_ENVIRONMENT}."
+  exit 0
+fi
+
+echo "Deleting Kubernetes workloads from ${CLUSTER_NAME}..."
 
 echo "Deleting vLLM resources..."
 kubectl_delete_crd_kind scaledobjects.keda.sh scaledobject --all -n vllm

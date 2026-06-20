@@ -34,7 +34,33 @@ kubernetes/
 docker/
   Dockerfile.vllm     # Pinned vLLM image
 scripts/
-  patch-manifests.sh  # Inject Terraform outputs into manifests
+  patch-manifests.sh   # Inject Terraform outputs into manifests
+  install-controllers.sh # ALB Controller + Karpenter (Helm, post-Terraform)
+  install-addons.sh    # Helm add-ons (EFS CSI, External Secrets, KEDA, Prometheus)
+  deploy-k8s.sh        # Patch + kubectl apply
+  delete-k8s.sh        # Remove K8s workloads
+  delete-addons.sh     # Uninstall Helm add-ons
+  destroy.sh           # Full teardown (K8s → Helm → terraform destroy)
+  lib/                 # Shared env/cluster helpers
+```
+
+## Quick Start
+
+Run all `make` commands from the **repository root** (`eks-vllm/`), not from `terraform/environments/*`.
+
+| Command | Description |
+|---|---|
+| `make apply TF_ENVIRONMENT=prod` | Deploy AWS infrastructure |
+| `make deploy-k8s TF_ENVIRONMENT=prod` | Apply Kubernetes manifests |
+| `make delete-k8s TF_ENVIRONMENT=prod` | Remove K8s workloads (keeps cluster) |
+| `make destroy TF_ENVIRONMENT=prod` | Delete everything for an environment |
+
+Set `TF_ENVIRONMENT=dev` or `TF_ENVIRONMENT=prod` (default: `prod`).
+
+Scripts can also be run directly:
+
+```bash
+TF_ENVIRONMENT=dev ./scripts/deploy-k8s.sh
 ```
 
 ## GitHub Actions Deploy
@@ -56,6 +82,15 @@ Create GitHub **Environments** named `dev` and `prod` (Settings → Environments
 | `AWS_SECRET_ACCESS_KEY` | IAM secret key |
 | `HF_TOKEN` | HuggingFace token (synced to Secrets Manager) |
 
+### Repository variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `INSTANCE_TYPE` | `g5.4xlarge` | GPU instance type for Karpenter node pools |
+| `MODEL_NAME` | `Qwen/Qwen3-8B` | HuggingFace model ID (weights + vLLM serve path) |
+
+Set these under **Settings → Secrets and variables → Actions → Variables**.
+
 ### Per-environment secrets (dev / prod environments)
 
 | Secret | Purpose |
@@ -71,15 +106,18 @@ The IAM user needs permissions for Terraform (VPC, EKS, EFS, ECR, IAM, etc.), EC
 
 ### What the deploy workflow does
 
-1. `terraform apply` in `terraform/environments/<env>`
-2. Install Helm add-ons (EFS CSI, External Secrets, KEDA, Prometheus)
-3. Sync `HF_TOKEN` → AWS Secrets Manager
-4. Build and push vLLM image to ECR
-5. Patch and apply Kubernetes manifests
+1. `terraform apply` in `terraform/environments/<env>` (AWS + IAM only)
+2. Install ALB Controller and Karpenter via Helm (`install-controllers.sh`)
+3. Install Helm add-ons (EFS CSI, External Secrets, KEDA, Prometheus)
+4. Sync `HF_TOKEN` → AWS Secrets Manager
+5. Build and push vLLM image to ECR
+6. Patch and apply Kubernetes manifests
 
 Pull requests targeting `dev` or `main` that touch `terraform/**` run `terraform plan` for the matching environment.
 
 ### Local teardown
+
+Run from the repository root:
 
 Remove workloads only (keeps EKS cluster and Terraform infrastructure):
 
@@ -101,7 +139,20 @@ make destroy TF_ENVIRONMENT=dev
 
 Each command prompts for confirmation by typing the environment name (`dev` or `prod`). Skip prompts with `AUTO_APPROVE=1`.
 
+If an environment was **never deployed**, delete/destroy exits cleanly after reporting `Cluster: qwen-vllm-dev (not deployed)` — no error.
+
 Bootstrap state (`terraform/bootstrap`) is not removed by `destroy` — the S3 bucket has `prevent_destroy` enabled.
+
+### Environment sizing
+
+| | dev | prod |
+|---|---|---|
+| Cluster | `qwen-vllm-dev` | `qwen-vllm-prod` |
+| VPC CIDR | `10.1.0.0/16` | `10.0.0.0/16` |
+| NAT gateways | 1 (single) | 2 (HA) |
+| System nodes | 1× `m6i.large` | 2× `m6i.large` |
+| HF secret | `qwen-vllm-dev/hf-token` | `qwen-vllm/hf-token` |
+| Terraform state key | `dev/terraform.tfstate` | `prod/terraform.tfstate` |
 
 ### One-time bootstrap (still manual)
 
@@ -114,29 +165,68 @@ terraform init && terraform apply
 
 ## Rollout Sequence (local alternative)
 
-### 1. Bootstrap Terraform state
+All steps below assume you are in the repository root and use `TF_ENVIRONMENT` (`dev` or `prod`).
+
+### 1. Bootstrap Terraform state (once per AWS account)
 
 ```bash
 cd terraform/bootstrap
 terraform init && terraform apply
+cd ../..
 ```
 
 ### 2. Deploy infrastructure
 
 ```bash
-cd terraform/environments/prod
-terraform init
-terraform plan
-terraform apply
+make init TF_ENVIRONMENT=prod
+make plan TF_ENVIRONMENT=prod
+make apply TF_ENVIRONMENT=prod
+```
+
+Or manually:
+
+```bash
+cd terraform/environments/prod   # or dev
+terraform init && terraform apply
 ```
 
 Configure kubectl:
 
 ```bash
-aws eks update-kubeconfig --region us-east-1 --name qwen-vllm-prod
+make kubeconfig-prod   # or: make kubeconfig-dev
 ```
 
-### 3. Install cluster add-ons
+### 3. Install controllers and add-ons
+
+```bash
+make install-controllers TF_ENVIRONMENT=prod
+make install-addons TF_ENVIRONMENT=prod
+```
+
+`install-controllers` installs ALB Controller and Karpenter via Helm after the cluster is ready (avoids Terraform RBAC issues in CI). Karpenter and ALB IAM roles are still created by Terraform.
+
+Sync the HuggingFace token to Secrets Manager:
+
+```bash
+HF_TOKEN=hf_xxx make sync-hf-secret TF_ENVIRONMENT=prod
+```
+
+### 4. Build, push, and deploy
+
+```bash
+make build-image TF_ENVIRONMENT=prod
+
+ACM_CERTIFICATE_ARN=arn:aws:acm:... \
+INFERENCE_HOSTNAME=inference.example.com \
+make deploy-k8s TF_ENVIRONMENT=prod
+```
+
+`deploy-k8s` patches manifests from Terraform outputs, applies them in order, and waits for the model-seed job. Ingress is skipped if `ACM_CERTIFICATE_ARN` is unset.
+
+Patched manifests are written to `kubernetes/.generated/<env>/`.
+
+<details>
+<summary>Manual add-on and manifest steps (if not using scripts)</summary>
 
 **EFS CSI driver** (uses IRSA role from Terraform):
 
@@ -155,7 +245,7 @@ helm install external-secrets external-secrets/external-secrets \
   --namespace external-secrets --create-namespace
 ```
 
-Store HF token in Secrets Manager as `qwen-vllm/hf-token`, then apply:
+Store HF token in Secrets Manager (`qwen-vllm/hf-token` for prod, `qwen-vllm-dev/hf-token` for dev), then apply:
 
 ```bash
 kubectl apply -f kubernetes/vllm/cluster-secret-store.yaml
@@ -169,7 +259,7 @@ helm repo add kedacore https://kedacore.github.io/charts
 helm install keda kedacore/keda --namespace keda --create-namespace
 ```
 
-**Prometheus (for metrics + KEDA triggers):**
+**Prometheus** (for metrics + KEDA triggers):
 
 ```bash
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
@@ -177,49 +267,22 @@ helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
   --namespace monitoring --create-namespace
 ```
 
-Karpenter and ALB Controller are installed by Terraform Helm releases.
-
-### 4. Patch and apply Kubernetes manifests
+Patch and apply manifests manually:
 
 ```bash
-chmod +x scripts/patch-manifests.sh
-./scripts/patch-manifests.sh
-# Follow printed kubectl apply commands
+make patch TF_ENVIRONMENT=prod
+# Patched files in kubernetes/.generated/prod/
 ```
 
-Or manually replace placeholders in manifests:
+Placeholders replaced by `patch-manifests.sh`:
 - `CLUSTER_NAME`, `KARPENTER_NODE_ROLE_NAME`, `INSTANCE_PROFILE`
 - `FILE_SYSTEM_ID`, `ACCESS_POINT_ID`, `ECR_REPOSITORY_URL`
-- `ACM_CERTIFICATE_ARN`, `CLOUDWATCH_AGENT_ROLE_ARN`
+- `ACM_CERTIFICATE_ARN`, `CLOUDWATCH_AGENT_ROLE_ARN`, `INFERENCE_HOSTNAME`
+- `MODEL_NAME`, `MODEL_PATH`, `INSTANCE_FAMILY`, `INSTANCE_SIZE` (from `MODEL_NAME` / `INSTANCE_TYPE` env vars)
 
-Apply order:
+</details>
 
-```bash
-kubectl apply -f kubernetes/karpenter/        # after patching
-kubectl apply -f kubernetes/gpu/
-kubectl apply -f kubernetes/vllm/namespace.yaml
-kubectl apply -f kubernetes/vllm/configmap.yaml
-kubectl apply -f kubernetes/vllm/pvc-efs.yaml   # after patching
-kubectl apply -f kubernetes/vllm/model-seed-job.yaml
-kubectl wait --for=condition=complete job/model-seed -n vllm --timeout=3600s
-kubectl apply -f kubernetes/vllm/deployment.yaml  # after patching
-kubectl apply -f kubernetes/vllm/service.yaml
-kubectl apply -f kubernetes/vllm/ingress.yaml     # set ACM cert + hostname
-kubectl apply -f kubernetes/vllm/keda-scaledobject.yaml
-kubectl apply -f kubernetes/monitoring/
-```
-
-### 5. Build and push vLLM image
-
-```bash
-ECR_URL=$(cd terraform/environments/prod && terraform output -raw ecr_repository_url)
-aws ecr get-login-password --region us-east-1 | \
-  docker login --username AWS --password-stdin "${ECR_URL%%/*}"
-docker build -t "${ECR_URL}:v0.8.4" -f docker/Dockerfile.vllm .
-docker push "${ECR_URL}:v0.8.4"
-```
-
-### 6. Validate
+### 5. Validate
 
 ```bash
 # Wait for GPU nodes
@@ -238,13 +301,13 @@ curl http://localhost:8000/v1/chat/completions \
   }'
 ```
 
-### 7. Load test and verify autoscaling
+### 6. Load test and verify autoscaling
 
 - Confirm KEDA scales replicas when GPU cache > 80% or queue depth > 5
 - Confirm Karpenter launches Spot G5 nodes when pending GPU pods exist
 - Import Grafana dashboard from `kubernetes/monitoring/grafana-dashboard-vllm.json`
 
-### 8. Production HA baseline
+### 7. Production HA baseline
 
 Ensure 2 On-Demand replicas across AZs (default in deployment). Update PDB to `minAvailable: 2` when running 3+ replicas.
 

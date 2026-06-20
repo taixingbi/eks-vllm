@@ -68,6 +68,4 @@ module "karpenter" {
   oidc_provider     = module.eks.oidc_provider
 
   tags = var.tags
-
-  depends_on = [module.alb_controller]
 }

@@ -50,6 +50,8 @@ jobs:
       AWS_REGION: us-east-1
       TF_IN_AUTOMATION: true
       TF_ENVIRONMENT: ${{ needs.resolve-environment.outputs.environment }}
+      INSTANCE_TYPE: ${{ vars.INSTANCE_TYPE }}
+      MODEL_NAME: ${{ vars.MODEL_NAME }}
 
     steps:
       - name: Checkout
@@ -85,6 +87,9 @@ jobs:
 
       - name: Setup Helm
         uses: azure/setup-helm@v4
+
+      - name: Install ALB Controller and Karpenter
+        run: ./scripts/install-controllers.sh
 
       - name: Install cluster add-ons
         run: ./scripts/install-addons.sh

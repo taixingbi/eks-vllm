@@ -59,6 +59,16 @@ output "karpenter_interruption_queue_name" {
   value       = module.karpenter.interruption_queue_name
 }
 
+output "alb_controller_role_arn" {
+  description = "ALB controller IRSA role ARN"
+  value       = module.alb_controller.role_arn
+}
+
+output "karpenter_controller_role_arn" {
+  description = "Karpenter controller IRSA role ARN"
+  value       = module.karpenter.controller_role_arn
+}
+
 output "cloudwatch_agent_role_arn" {
   description = "CloudWatch agent IRSA role ARN"
   value       = module.eks.cloudwatch_agent_role_arn

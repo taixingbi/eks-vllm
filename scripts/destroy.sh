@@ -3,6 +3,7 @@
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/env.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/cluster.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/confirm.sh"
 
 if ! command -v terraform >/dev/null 2>&1; then
@@ -13,20 +14,23 @@ fi
 confirm_action "destroy all infrastructure"
 
 AWS_REGION="${AWS_REGION:-us-east-1}"
-cd "$TF_DIR"
 
-if CLUSTER_NAME=$(terraform output -raw cluster_name 2>/dev/null); then
-  if aws eks update-kubeconfig --region "${AWS_REGION}" --name "${CLUSTER_NAME}" >/dev/null 2>&1; then
-    AUTO_APPROVE=1 "${ROOT}/scripts/delete-k8s.sh"
-    AUTO_APPROVE=1 "${ROOT}/scripts/delete-addons.sh"
-  else
-    echo "Could not configure kubectl; skipping Kubernetes cleanup."
-  fi
+if CLUSTER_NAME=$(configure_kubectl 2>/dev/null); then
+  AUTO_APPROVE=1 "${ROOT}/scripts/delete-k8s.sh"
+  AUTO_APPROVE=1 "${ROOT}/scripts/delete-addons.sh"
 else
-  echo "Cluster not found in Terraform state; skipping Kubernetes cleanup."
+  echo "No running cluster for ${TF_ENVIRONMENT}; skipping Kubernetes cleanup."
 fi
 
-terraform init -input=false
-terraform destroy -auto-approve
+terraform_init_if_needed
+terraform -chdir="${TF_DIR}" init -input=false
+
+if ! terraform -chdir="${TF_DIR}" destroy -auto-approve; then
+  if ! cluster_exists "$(resolve_cluster_name)" && [[ ! -f "${TF_DIR}/.terraform/terraform.tfstate" ]]; then
+    echo "Nothing to destroy for ${TF_ENVIRONMENT}."
+    exit 0
+  fi
+  exit 1
+fi
 
 echo "Infrastructure destroyed (${TF_ENVIRONMENT})."

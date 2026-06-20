@@ -16,44 +16,4 @@ module "alb_controller_irsa" {
   tags = var.tags
 }
 
-resource "helm_release" "alb_controller" {
-  name       = "aws-load-balancer-controller"
-  repository = "https://aws.github.io/eks-charts"
-  chart      = "aws-load-balancer-controller"
-  version    = var.chart_version
-  namespace  = "kube-system"
-  wait       = true
-  timeout    = 600
-
-  set {
-    name  = "clusterName"
-    value = var.cluster_name
-  }
-
-  set {
-    name  = "serviceAccount.create"
-    value = "true"
-  }
-
-  set {
-    name  = "serviceAccount.name"
-    value = "aws-load-balancer-controller"
-  }
-
-  set {
-    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = module.alb_controller_irsa.iam_role_arn
-  }
-
-  set {
-    name  = "region"
-    value = data.aws_region.current.name
-  }
-
-  set {
-    name  = "vpcId"
-    value = var.vpc_id
-  }
-}
-
 data "aws_region" "current" {}
