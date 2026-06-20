@@ -11,7 +11,8 @@ kind: EC2NodeClass
 metadata:
   name: g5-gpu
 spec:
-  amiFamily: AL2023
+  amiSelectorTerms:
+    - alias: al2023@latest
   role: KARPENTER_NODE_ROLE_NAME
   subnetSelectorTerms:
     - tags:
@@ -31,17 +32,6 @@ spec:
     httpProtocolIPv6: disabled
     httpPutResponseHopLimit: 2
     httpTokens: required
-  userData: |
-    MIME-Version: 1.0
-    Content-Type: multipart/mixed; boundary="BOUNDARY"
-
-    --BOUNDARY
-    Content-Type: text/x-shellscript; charset="us-ascii"
-
-    #!/bin/bash
-    /etc/eks/bootstrap.sh CLUSTER_NAME
-
-    --BOUNDARY--
   tags:
     Project: qwen-vllm
     NodePool: g5-gpu
