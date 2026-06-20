@@ -79,6 +79,11 @@ output "efs_csi_role_arn" {
   value       = module.eks.efs_csi_role_arn
 }
 
+output "external_secrets_role_arn" {
+  description = "External Secrets Operator IRSA role ARN"
+  value       = module.external_secrets.role_arn
+}
+
 output "configure_kubectl" {
   description = "Command to configure kubectl"
   value       = "aws eks update-kubeconfig --region ${var.aws_region} --name ${module.eks.cluster_name}"

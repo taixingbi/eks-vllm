@@ -69,3 +69,13 @@ module "karpenter" {
 
   tags = var.tags
 }
+
+module "external_secrets" {
+  source = "../../modules/external-secrets"
+
+  cluster_name                  = module.eks.cluster_name
+  oidc_provider_arn             = module.eks.cluster_oidc_provider_arn
+  secrets_manager_secret_prefix = "qwen-vllm-dev"
+
+  tags = var.tags
+}

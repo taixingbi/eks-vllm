@@ -21,8 +21,13 @@ kubectl apply -f "${ROOT}/kubernetes/vllm/cluster-secret-store.yaml"
 kubectl apply -f "${ROOT}/kubernetes/vllm/namespace.yaml"
 kubectl apply -f "${TMP_SECRETS}"
 
-kubectl wait --for=condition=Ready clustersecretstore/aws-secrets-manager --timeout=300s 2>/dev/null || true
-kubectl wait --for=condition=Ready externalsecret/hf-token -n vllm --timeout=300s 2>/dev/null || true
+echo "Waiting for External Secrets (up to 5m)..."
+kubectl wait --for=condition=Ready clustersecretstore/aws-secrets-manager --timeout=300s 2>/dev/null || {
+  echo "Warning: ClusterSecretStore not Ready — run: make install-addons TF_ENVIRONMENT=${TF_ENVIRONMENT}"
+}
+kubectl wait --for=condition=Ready externalsecret/hf-token -n vllm --timeout=300s 2>/dev/null || {
+  echo "Warning: hf-token ExternalSecret not Ready — continuing (HF_TOKEN is optional for public models)"
+}
 
 kubectl apply -f "${OUT_DIR}/karpenter/"
 kubectl apply -f "${OUT_DIR}/nvidia-device-plugin.yaml"

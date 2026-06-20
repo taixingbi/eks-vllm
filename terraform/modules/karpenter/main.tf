@@ -107,6 +107,9 @@ module "karpenter_irsa" {
 
   attach_karpenter_controller_policy = true
 
+  enable_karpenter_instance_profile_creation = true
+  karpenter_tag_key                            = "karpenter.k8s.aws/cluster"
+
   karpenter_controller_cluster_name     = var.cluster_name
   karpenter_controller_node_iam_role_arns = [aws_iam_role.node.arn]
 

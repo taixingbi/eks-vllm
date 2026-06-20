@@ -8,6 +8,7 @@ EXTERNAL_SECRETS_CHART_VERSION="${EXTERNAL_SECRETS_CHART_VERSION:-2.6.0}"
 
 cd "$TF_DIR"
 EFS_CSI_ROLE_ARN=$(terraform output -raw efs_csi_role_arn)
+EXTERNAL_SECRETS_ROLE_ARN=$(terraform output -raw external_secrets_role_arn)
 
 helm repo add aws-efs-csi-driver https://kubernetes-sigs.github.io/aws-efs-csi-driver/ 2>/dev/null || true
 helm repo add external-secrets https://charts.external-secrets.io 2>/dev/null || true
@@ -23,6 +24,7 @@ helm upgrade --install aws-efs-csi-driver aws-efs-csi-driver/aws-efs-csi-driver 
 helm upgrade --install external-secrets external-secrets/external-secrets \
   --namespace external-secrets --create-namespace \
   --version "${EXTERNAL_SECRETS_CHART_VERSION}" \
+  --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"="${EXTERNAL_SECRETS_ROLE_ARN}" \
   --wait --timeout 10m
 
 helm upgrade --install keda kedacore/keda \
