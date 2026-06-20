@@ -22,9 +22,9 @@ spec:
                   key: token
                   optional: true
             - name: MODEL_ID
-              value: MODEL_NAME
+              value: __MODEL_ID_VALUE__
             - name: MODEL_PATH
-              value: MODEL_PATH
+              value: __MODEL_PATH_VALUE__
           command:
             - /bin/sh
             - -c

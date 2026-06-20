@@ -33,8 +33,8 @@ patch_file() {
     -e "s|ACCESS_POINT_ID|${EFS_AP_ID}|g" \
     -e "s|ECR_REPOSITORY_URL|${ECR_URL}|g" \
     -e "s|CLOUDWATCH_AGENT_ROLE_ARN|${CW_ROLE_ARN}|g" \
-    -e "s|MODEL_NAME|${MODEL_NAME}|g" \
-    -e "s|MODEL_PATH|${MODEL_PATH}|g" \
+    -e "s|__MODEL_ID_VALUE__|${MODEL_NAME}|g" \
+    -e "s|__MODEL_PATH_VALUE__|${MODEL_PATH}|g" \
     -e "s|INSTANCE_FAMILY|${INSTANCE_FAMILY}|g" \
     -e "s|INSTANCE_SIZE|${INSTANCE_SIZE}|g" \
     "$src" > "$dst"
