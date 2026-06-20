@@ -153,6 +153,7 @@ Bootstrap state (`terraform/bootstrap`) is not removed by `destroy` — the S3 b
 | VPC CIDR | `10.1.0.0/16` | `10.0.0.0/16` |
 | NAT gateways | 1 (single) | 2 (HA) |
 | System nodes | 1× `m6i.large` | 2× `m6i.large` |
+| vLLM replicas | 1 | 2 |
 | HF secret | `qwen-vllm-dev/hf-token` | `qwen-vllm/hf-token` |
 | Terraform state key | `dev/terraform.tfstate` | `prod/terraform.tfstate` |
 
@@ -280,17 +281,27 @@ Placeholders replaced by `patch-manifests.sh`:
 - `CLUSTER_NAME`, `KARPENTER_NODE_ROLE_NAME`, `INSTANCE_PROFILE`
 - `FILE_SYSTEM_ID`, `ACCESS_POINT_ID`, `ECR_REPOSITORY_URL`
 - `ACM_CERTIFICATE_ARN`, `CLOUDWATCH_AGENT_ROLE_ARN`, `INFERENCE_HOSTNAME`
-- `__MODEL_ID_VALUE__`, `__MODEL_PATH_VALUE__`, `INSTANCE_FAMILY`, `INSTANCE_SIZE` (from `MODEL_NAME` / `INSTANCE_TYPE` env vars)
+- `__MODEL_ID_VALUE__`, `__MODEL_PATH_VALUE__`, `__VLLM_REPLICAS__`, `INSTANCE_FAMILY`, `INSTANCE_SIZE` (from `MODEL_NAME` / `INSTANCE_TYPE` env vars; dev uses 1 vLLM replica, prod uses 2)
 
 </details>
 
 ### 5. Validate
 
 ```bash
-# Wait for GPU nodes
+# Wait for GPU nodes (Karpenter provisions after vLLM pods are Pending)
 kubectl get nodes -l workload=gpu
 kubectl get pods -n vllm -w
+```
 
+**Troubleshooting**
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `model-seed` Pending, `Insufficient cpu` | Dev has one `m6i.large`; cluster addons use most CPU | Delete stuck job and redeploy: `kubectl delete job model-seed -n vllm` then `make deploy-k8s TF_ENVIRONMENT=dev` |
+| No GPU nodes | Karpenter only adds GPU nodes when pods request `nvidia.com/gpu` | Wait for vLLM deployment after model-seed completes |
+| Wrong cluster / stale kubeconfig | Context points at destroyed env | `make kubeconfig-dev` or `make kubeconfig-prod` from repo root |
+
+```bash
 # Port-forward for local test
 kubectl port-forward -n vllm svc/vllm-qwen 8000:8000
 

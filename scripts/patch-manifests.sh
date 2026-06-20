@@ -21,6 +21,12 @@ CW_ROLE_ARN=$(terraform output -raw cloudwatch_agent_role_arn)
 ACM_CERTIFICATE_ARN="${ACM_CERTIFICATE_ARN:-}"
 INFERENCE_HOSTNAME="${INFERENCE_HOSTNAME:-inference.example.com}"
 
+if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
+  VLLM_REPLICAS=1
+else
+  VLLM_REPLICAS=2
+fi
+
 mkdir -p "${OUT_DIR}/karpenter" "${OUT_DIR}/vllm" "${OUT_DIR}/monitoring"
 
 patch_file() {
@@ -35,6 +41,7 @@ patch_file() {
     -e "s|CLOUDWATCH_AGENT_ROLE_ARN|${CW_ROLE_ARN}|g" \
     -e "s|__MODEL_ID_VALUE__|${MODEL_NAME}|g" \
     -e "s|__MODEL_PATH_VALUE__|${MODEL_PATH}|g" \
+    -e "s|__VLLM_REPLICAS__|${VLLM_REPLICAS}|g" \
     -e "s|INSTANCE_FAMILY|${INSTANCE_FAMILY}|g" \
     -e "s|INSTANCE_SIZE|${INSTANCE_SIZE}|g" \
     "$src" > "$dst"
@@ -72,3 +79,4 @@ echo "Patched manifests written to ${OUT_DIR} (${TF_ENVIRONMENT})"
 echo "  MODEL_NAME=${MODEL_NAME}"
 echo "  MODEL_PATH=${MODEL_PATH}"
 echo "  INSTANCE_TYPE=${INSTANCE_TYPE}"
+echo "  VLLM_REPLICAS=${VLLM_REPLICAS}"

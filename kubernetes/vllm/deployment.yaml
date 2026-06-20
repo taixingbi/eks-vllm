@@ -6,7 +6,7 @@ metadata:
   labels:
     app: vllm-qwen
 spec:
-  replicas: 2
+  replicas: __VLLM_REPLICAS__
   selector:
     matchLabels:
       app: vllm-qwen
@@ -84,11 +84,11 @@ spec:
               mountPath: /models
           resources:
             requests:
+              cpu: "500m"
+              memory: 1Gi
+            limits:
               cpu: "1"
               memory: 2Gi
-            limits:
-              cpu: "2"
-              memory: 4Gi
       containers:
         - name: vllm
           image: ECR_REPOSITORY_URL:v0.8.4
