@@ -8,6 +8,14 @@ AWS_REGION="${AWS_REGION:-us-east-1}"
 ALB_CHART_VERSION="${ALB_CHART_VERSION:-1.8.2}"
 KARPENTER_CHART_VERSION="${KARPENTER_CHART_VERSION:-1.0.8}"
 
+if [[ -z "${KARPENTER_REPLICAS:-}" ]]; then
+  if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
+    KARPENTER_REPLICAS=1
+  else
+    KARPENTER_REPLICAS=2
+  fi
+fi
+
 if ! command -v helm >/dev/null 2>&1; then
   echo "helm is required"
   exit 1
@@ -46,10 +54,11 @@ helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-contro
   --set vpcId="${VPC_ID}" \
   --wait --timeout 10m
 
-echo "Installing Karpenter..."
+echo "Installing Karpenter (${KARPENTER_REPLICAS} replica(s))..."
 helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter \
   --namespace kube-system \
   --version "${KARPENTER_CHART_VERSION}" \
+  --set replicas="${KARPENTER_REPLICAS}" \
   --set settings.clusterName="${CLUSTER_NAME}" \
   --set settings.clusterEndpoint="${CLUSTER_ENDPOINT}" \
   --set settings.interruptionQueue="${INTERRUPTION_QUEUE}" \

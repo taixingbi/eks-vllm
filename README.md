@@ -89,6 +89,8 @@ Create GitHub **Environments** named `dev` and `prod` (Settings → Environments
 | `INSTANCE_TYPE` | `g5.4xlarge` | GPU instance type for Karpenter node pools |
 | `MODEL_NAME` | `Qwen/Qwen3-8B` | HuggingFace model ID (weights + vLLM serve path) |
 
+Dev uses 1 Karpenter replica (single system node); prod uses 2.
+
 Set these under **Settings → Secrets and variables → Actions → Variables**.
 
 ### Per-environment secrets (dev / prod environments)
