@@ -30,13 +30,13 @@ spec:
   triggers:
     - type: prometheus
       metadata:
-        serverAddress: http://prometheus-server.monitoring.svc.cluster.local:9090
+        serverAddress: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
         metricName: vllm_gpu_cache_usage_perc
         threshold: "80"
         query: avg(vllm:gpu_cache_usage_perc{namespace="vllm"})
     - type: prometheus
       metadata:
-        serverAddress: http://prometheus-server.monitoring.svc.cluster.local:9090
+        serverAddress: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
         metricName: vllm_num_requests_running
         threshold: "5"
         query: sum(vllm:num_requests_running{namespace="vllm"})

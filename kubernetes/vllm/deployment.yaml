@@ -29,7 +29,7 @@ spec:
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: topology.kubernetes.io/zone
-          whenUnsatisfiable: DoNotSchedule
+          whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels:
               app: vllm-qwen
@@ -86,10 +86,10 @@ spec:
           resources:
             requests:
               cpu: "500m"
-              memory: 1Gi
+              memory: 512Mi
             limits:
               cpu: "1"
-              memory: 2Gi
+              memory: 1Gi
       containers:
         - name: vllm
           image: ECR_REPOSITORY_URL:v0.8.4
@@ -131,8 +131,8 @@ spec:
             - --disable-log-requests
           resources:
             requests:
-              cpu: "8"
-              memory: 32Gi
+              cpu: "4"
+              memory: __VLLM_MEMORY_REQUEST__
               nvidia.com/gpu: "1"
             limits:
               cpu: "16"

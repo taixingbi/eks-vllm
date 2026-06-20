@@ -29,7 +29,13 @@ kubectl wait --for=condition=Ready externalsecret/hf-token -n vllm --timeout=300
   echo "Warning: hf-token ExternalSecret not Ready — continuing (HF_TOKEN is optional for public models)"
 }
 
-kubectl apply -f "${OUT_DIR}/karpenter/"
+kubectl apply -f "${OUT_DIR}/karpenter/ec2nodeclass-g5.yaml"
+kubectl apply -f "${OUT_DIR}/karpenter/nodepool-g5-ondemand.yaml"
+if [[ "${TF_ENVIRONMENT}" != "dev" ]]; then
+  kubectl apply -f "${OUT_DIR}/karpenter/nodepool-g5-spot.yaml"
+else
+  kubectl delete nodepool g5-spot --ignore-not-found 2>/dev/null || true
+fi
 kubectl apply -f "${OUT_DIR}/nvidia-device-plugin.yaml"
 kubectl apply -f "${OUT_DIR}/vllm/configmap.yaml"
 kubectl apply -f "${OUT_DIR}/vllm/pvc-efs.yaml"

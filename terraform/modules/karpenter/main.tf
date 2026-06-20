@@ -26,7 +26,7 @@ resource "aws_sqs_queue_policy" "interruption" {
         Sid    = "AllowEventBridge"
         Effect = "Allow"
         Principal = {
-          Service = ["events.amazonaws.com", "sqs.amazonaws.com"]
+          Service = "events.amazonaws.com"
         }
         Action   = "sqs:SendMessage"
         Resource = aws_sqs_queue.interruption.arn
@@ -49,6 +49,60 @@ resource "aws_cloudwatch_event_rule" "spot_interruption" {
 
 resource "aws_cloudwatch_event_target" "spot_interruption" {
   rule      = aws_cloudwatch_event_rule.spot_interruption.name
+  target_id = "KarpenterInterruptionQueue"
+  arn       = aws_sqs_queue.interruption.arn
+}
+
+resource "aws_cloudwatch_event_rule" "rebalance_recommendation" {
+  name        = "${var.cluster_name}-rebalance-recommendation"
+  description = "Spot rebalance recommendations"
+
+  event_pattern = jsonencode({
+    source      = ["aws.ec2"]
+    detail-type = ["EC2 Instance Rebalance Recommendation"]
+  })
+
+  tags = var.tags
+}
+
+resource "aws_cloudwatch_event_target" "rebalance_recommendation" {
+  rule      = aws_cloudwatch_event_rule.rebalance_recommendation.name
+  target_id = "KarpenterInterruptionQueue"
+  arn       = aws_sqs_queue.interruption.arn
+}
+
+resource "aws_cloudwatch_event_rule" "instance_state_change" {
+  name        = "${var.cluster_name}-instance-state-change"
+  description = "EC2 instance state changes"
+
+  event_pattern = jsonencode({
+    source      = ["aws.ec2"]
+    detail-type = ["EC2 Instance State-change Notification"]
+  })
+
+  tags = var.tags
+}
+
+resource "aws_cloudwatch_event_target" "instance_state_change" {
+  rule      = aws_cloudwatch_event_rule.instance_state_change.name
+  target_id = "KarpenterInterruptionQueue"
+  arn       = aws_sqs_queue.interruption.arn
+}
+
+resource "aws_cloudwatch_event_rule" "scheduled_change" {
+  name        = "${var.cluster_name}-scheduled-change"
+  description = "AWS Health scheduled changes"
+
+  event_pattern = jsonencode({
+    source      = ["aws.health"]
+    detail-type = ["AWS Health Event"]
+  })
+
+  tags = var.tags
+}
+
+resource "aws_cloudwatch_event_target" "scheduled_change" {
+  rule      = aws_cloudwatch_event_rule.scheduled_change.name
   target_id = "KarpenterInterruptionQueue"
   arn       = aws_sqs_queue.interruption.arn
 }
@@ -139,4 +193,14 @@ resource "aws_iam_role_policy" "karpenter_pass_role" {
       }
     ]
   })
+}
+
+resource "aws_eks_access_entry" "node" {
+  cluster_name  = var.cluster_name
+  principal_arn = aws_iam_role.node.arn
+  type          = "EC2_LINUX"
+
+  tags = var.tags
+
+  depends_on = [aws_sqs_queue_policy.interruption]
 }

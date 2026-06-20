@@ -154,6 +154,7 @@ Bootstrap state (`terraform/bootstrap`) is not removed by `destroy` — the S3 b
 | NAT gateways | 1 (single) | 2 (HA) |
 | System nodes | 1× `m6i.large` | 2× `m6i.large` |
 | vLLM replicas | 1 | 2 |
+| GPU instance (default) | `g5.2xlarge` (8 vCPU quota) | `g5.4xlarge` |
 | HF secret | `qwen-vllm-dev/hf-token` | `qwen-vllm/hf-token` |
 | Terraform state key | `dev/terraform.tfstate` | `prod/terraform.tfstate` |
 
@@ -302,6 +303,7 @@ kubectl get pods -n vllm -w
 | `model-seed` Pending, `Insufficient cpu` | Dev has one `m6i.large`; Karpenter + Prometheus consume most CPU | On **dev**, model-seed is skipped — delete the stuck job and redeploy: `kubectl delete job model-seed -n vllm && make deploy-k8s TF_ENVIRONMENT=dev`. vLLM downloads via init container on the GPU node. |
 | `ImagePullBackOff` on `huggingface/huggingface_hub` | That Docker Hub image does not exist | Run `make build-image TF_ENVIRONMENT=dev` (pushes `:model-downloader` to ECR), delete the job, redeploy |
 | No GPU nodes | Karpenter only adds GPU nodes when pods request `nvidia.com/gpu` | Wait for vLLM deployment after model-seed completes (prod) or after deploy applies vLLM (dev) |
+| `VcpuLimitExceeded` / GPU node won't launch | Default G/VT vCPU quota is often 8; `g5.4xlarge` needs 16 | Dev defaults to `g5.2xlarge`. For prod, request quota increase: [AWS EC2 quota request](https://console.aws.amazon.com/servicequotas/) → **Running On-Demand G and VT instances** → at least 32 |
 | Wrong cluster / stale kubeconfig | Context points at destroyed env | `make kubeconfig-dev` or `make kubeconfig-prod` from repo root |
 
 ```bash

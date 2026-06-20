@@ -40,4 +40,4 @@ spec:
   disruption:
     consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: 5m
-  weight: 50
+  weight: 10

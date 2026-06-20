@@ -7,7 +7,7 @@ variable "oidc_provider_arn" {
 }
 
 variable "secrets_manager_secret_prefix" {
-  description = "Prefix for Secrets Manager secrets this role may read (e.g. qwen-vllm-dev)"
+  description = "Secrets Manager name prefix this role may read, with trailing slash (e.g. qwen-vllm/)"
   type        = string
 }
 

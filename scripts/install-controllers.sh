@@ -32,12 +32,18 @@ INTERRUPTION_QUEUE=$(terraform output -raw karpenter_interruption_queue_name)
 configure_kubectl >/dev/null
 
 echo "Waiting for EKS API access..."
+AUTH_OK=false
 for _ in $(seq 1 30); do
   if kubectl auth can-i create customresourcedefinitions --all-namespaces >/dev/null 2>&1; then
+    AUTH_OK=true
     break
   fi
   sleep 10
 done
+if [[ "${AUTH_OK}" != "true" ]]; then
+  echo "ERROR: EKS API not reachable or kubectl lacks permissions after 5 minutes"
+  exit 1
+fi
 
 helm repo add eks https://aws.github.io/eks-charts 2>/dev/null || true
 helm repo update

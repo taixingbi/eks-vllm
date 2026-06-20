@@ -19,11 +19,16 @@ export TF_DIR="${ROOT}/terraform/environments/${TF_ENVIRONMENT}"
 export OUT_DIR="${OUT_DIR:-${ROOT}/kubernetes/.generated/${TF_ENVIRONMENT}}"
 
 case "${TF_ENVIRONMENT}" in
-  prod) export HF_SECRET_NAME="${HF_SECRET_NAME:-qwen-vllm/hf-token}" ;;
-  dev)  export HF_SECRET_NAME="${HF_SECRET_NAME:-qwen-vllm-dev/hf-token}" ;;
+  prod)
+    export HF_SECRET_NAME="${HF_SECRET_NAME:-qwen-vllm/hf-token}"
+    export INSTANCE_TYPE="${INSTANCE_TYPE:-g5.4xlarge}"
+    ;;
+  dev)
+    export HF_SECRET_NAME="${HF_SECRET_NAME:-qwen-vllm-dev/hf-token}"
+    # Default to g5.2xlarge (8 vCPU) for typical new-account G/VT quota of 8
+    export INSTANCE_TYPE="${INSTANCE_TYPE:-g5.2xlarge}"
+    ;;
 esac
-
-export INSTANCE_TYPE="${INSTANCE_TYPE:-g5.4xlarge}"
 export MODEL_NAME="${MODEL_NAME:-Qwen/Qwen3-8B}"
 export MODEL_BASENAME="${MODEL_NAME##*/}"
 export MODEL_PATH="/models/${MODEL_BASENAME}"

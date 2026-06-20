@@ -30,7 +30,7 @@ data:
       "logs": {
         "metrics_collected": {
           "kubernetes": {
-            "cluster_name": "qwen-vllm-prod",
+            "cluster_name": "__CLUSTER_NAME_VALUE__",
             "metrics_collection_interval": 60
           }
         },
@@ -63,7 +63,7 @@ spec:
             - name: AWS_REGION
               value: us-east-1
             - name: CLUSTER_NAME
-              value: qwen-vllm-prod
+              value: __CLUSTER_NAME_VALUE__
           resources:
             limits:
               cpu: 200m

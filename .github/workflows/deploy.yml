@@ -115,6 +115,6 @@ jobs:
 
       - name: Wait for vLLM rollout
         run: |
-          kubectl rollout status deployment/vllm-qwen -n vllm --timeout=20m || true
+          kubectl rollout status deployment/vllm-qwen -n vllm --timeout=20m
           kubectl get pods -n vllm
           kubectl get nodes -l workload=gpu 2>/dev/null || true
