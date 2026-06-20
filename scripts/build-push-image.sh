@@ -15,10 +15,15 @@ aws ecr get-login-password --region "${AWS_REGION}" | \
 
 docker build -t "${ECR_URL}:${VLLM_IMAGE_TAG}" -f "${ROOT}/docker/Dockerfile.vllm" "${ROOT}"
 
+MODEL_DOWNLOADER_TAG="${MODEL_DOWNLOADER_TAG:-model-downloader}"
+docker build -t "${ECR_URL}:${MODEL_DOWNLOADER_TAG}" -f "${ROOT}/docker/Dockerfile.model-downloader" "${ROOT}"
+
 if [[ -n "${GITHUB_SHA:-}" ]]; then
   docker tag "${ECR_URL}:${VLLM_IMAGE_TAG}" "${ECR_URL}:${GITHUB_SHA:0:7}"
   docker push "${ECR_URL}:${GITHUB_SHA:0:7}"
 fi
 
 docker push "${ECR_URL}:${VLLM_IMAGE_TAG}"
+docker push "${ECR_URL}:${MODEL_DOWNLOADER_TAG}"
 echo "Pushed ${ECR_URL}:${VLLM_IMAGE_TAG} (${TF_ENVIRONMENT})"
+echo "Pushed ${ECR_URL}:${MODEL_DOWNLOADER_TAG} (${TF_ENVIRONMENT})"

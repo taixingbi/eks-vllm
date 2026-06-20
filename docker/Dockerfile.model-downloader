@@ -1,0 +1,4 @@
+# Lightweight image for huggingface-cli model downloads (seed job + init container).
+FROM python:3.12-slim-bookworm
+
+RUN pip install --no-cache-dir "huggingface_hub[cli]==0.26.2"

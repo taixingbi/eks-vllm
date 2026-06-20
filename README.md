@@ -224,7 +224,9 @@ INFERENCE_HOSTNAME=inference.example.com \
 make deploy-k8s TF_ENVIRONMENT=prod
 ```
 
-`deploy-k8s` patches manifests from Terraform outputs, applies them in order, and waits for the model-seed job. Ingress is skipped if `ACM_CERTIFICATE_ARN` is unset.
+`make build-image` pushes the vLLM image (`:v0.8.4`) and a lightweight model downloader (`:model-downloader`) to ECR. Both are used by the deployment init container; prod also uses the downloader for the model-seed job.
+
+`deploy-k8s` patches manifests from Terraform outputs, applies them in order, and waits for the model-seed job on prod (skipped on dev). Ingress is skipped if `ACM_CERTIFICATE_ARN` is unset.
 
 Patched manifests are written to `kubernetes/.generated/<env>/`.
 
@@ -298,7 +300,8 @@ kubectl get pods -n vllm -w
 | Symptom | Cause | Fix |
 |---|---|---|
 | `model-seed` Pending, `Insufficient cpu` | Dev has one `m6i.large`; Karpenter + Prometheus consume most CPU | On **dev**, model-seed is skipped — delete the stuck job and redeploy: `kubectl delete job model-seed -n vllm && make deploy-k8s TF_ENVIRONMENT=dev`. vLLM downloads via init container on the GPU node. |
-| No GPU nodes | Karpenter only adds GPU nodes when pods request `nvidia.com/gpu` | Wait for vLLM deployment after model-seed completes |
+| `ImagePullBackOff` on `huggingface/huggingface_hub` | That Docker Hub image does not exist | Run `make build-image TF_ENVIRONMENT=dev` (pushes `:model-downloader` to ECR), delete the job, redeploy |
+| No GPU nodes | Karpenter only adds GPU nodes when pods request `nvidia.com/gpu` | Wait for vLLM deployment after model-seed completes (prod) or after deploy applies vLLM (dev) |
 | Wrong cluster / stale kubeconfig | Context points at destroyed env | `make kubeconfig-dev` or `make kubeconfig-prod` from repo root |
 
 ```bash

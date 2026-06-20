@@ -15,7 +15,8 @@ spec:
         role: system
       containers:
         - name: download
-          image: huggingface/huggingface_hub:0.26.2
+          image: ECR_REPOSITORY_URL:model-downloader
+          imagePullPolicy: IfNotPresent
           env:
             - name: HF_TOKEN
               valueFrom:
