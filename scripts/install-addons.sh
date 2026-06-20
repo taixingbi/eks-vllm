@@ -29,8 +29,24 @@ helm upgrade --install keda kedacore/keda \
   --namespace keda --create-namespace \
   --wait --timeout 10m
 
-helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
-  --namespace monitoring --create-namespace \
+PROM_HELM_ARGS=(
+  --namespace monitoring --create-namespace
   --wait --timeout 15m
+)
+if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
+  PROM_HELM_ARGS+=(
+    --set alertmanager.enabled=false
+    --set grafana.enabled=false
+    --set kubeStateMetrics.enabled=false
+    --set nodeExporter.enabled=false
+    --set prometheus.prometheusSpec.resources.requests.cpu=100m
+    --set prometheus.prometheusSpec.resources.requests.memory=256Mi
+    --set prometheus.prometheusSpec.resources.limits.cpu=500m
+    --set prometheus.prometheusSpec.resources.limits.memory=512Mi
+  )
+fi
+
+helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  "${PROM_HELM_ARGS[@]}"
 
 echo "Cluster add-ons installed (${TF_ENVIRONMENT})."

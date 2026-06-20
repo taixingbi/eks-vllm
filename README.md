@@ -297,7 +297,7 @@ kubectl get pods -n vllm -w
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `model-seed` Pending, `Insufficient cpu` | Dev has one `m6i.large`; cluster addons use most CPU | Delete stuck job and redeploy: `kubectl delete job model-seed -n vllm` then `make deploy-k8s TF_ENVIRONMENT=dev` |
+| `model-seed` Pending, `Insufficient cpu` | Dev has one `m6i.large`; Karpenter + Prometheus consume most CPU | On **dev**, model-seed is skipped — delete the stuck job and redeploy: `kubectl delete job model-seed -n vllm && make deploy-k8s TF_ENVIRONMENT=dev`. vLLM downloads via init container on the GPU node. |
 | No GPU nodes | Karpenter only adds GPU nodes when pods request `nvidia.com/gpu` | Wait for vLLM deployment after model-seed completes |
 | Wrong cluster / stale kubeconfig | Context points at destroyed env | `make kubeconfig-dev` or `make kubeconfig-prod` from repo root |
 

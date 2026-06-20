@@ -23,8 +23,10 @@ INFERENCE_HOSTNAME="${INFERENCE_HOSTNAME:-inference.example.com}"
 
 if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
   VLLM_REPLICAS=1
+  KEDA_MIN_REPLICAS=1
 else
   VLLM_REPLICAS=2
+  KEDA_MIN_REPLICAS=2
 fi
 
 mkdir -p "${OUT_DIR}/karpenter" "${OUT_DIR}/vllm" "${OUT_DIR}/monitoring"
@@ -42,6 +44,7 @@ patch_file() {
     -e "s|__MODEL_ID_VALUE__|${MODEL_NAME}|g" \
     -e "s|__MODEL_PATH_VALUE__|${MODEL_PATH}|g" \
     -e "s|__VLLM_REPLICAS__|${VLLM_REPLICAS}|g" \
+    -e "s|__KEDA_MIN_REPLICAS__|${KEDA_MIN_REPLICAS}|g" \
     -e "s|INSTANCE_FAMILY|${INSTANCE_FAMILY}|g" \
     -e "s|INSTANCE_SIZE|${INSTANCE_SIZE}|g" \
     "$src" > "$dst"
@@ -65,11 +68,11 @@ patch_file "${ROOT}/kubernetes/vllm/deployment.yaml" "${OUT_DIR}/vllm/deployment
 patch_file "${ROOT}/kubernetes/vllm/configmap.yaml" "${OUT_DIR}/vllm/configmap.yaml"
 patch_file "${ROOT}/kubernetes/vllm/model-seed-job.yaml" "${OUT_DIR}/vllm/model-seed-job.yaml"
 patch_ingress "${ROOT}/kubernetes/vllm/ingress.yaml" "${OUT_DIR}/vllm/ingress.yaml"
+patch_file "${ROOT}/kubernetes/vllm/keda-scaledobject.yaml" "${OUT_DIR}/vllm/keda-scaledobject.yaml"
 patch_file "${ROOT}/kubernetes/monitoring/cloudwatch-agent.yaml" "${OUT_DIR}/monitoring/cloudwatch-agent.yaml"
 
 cp "${ROOT}/kubernetes/vllm/namespace.yaml" "${OUT_DIR}/vllm/"
 cp "${ROOT}/kubernetes/vllm/service.yaml" "${OUT_DIR}/vllm/"
-cp "${ROOT}/kubernetes/vllm/keda-scaledobject.yaml" "${OUT_DIR}/vllm/"
 cp "${ROOT}/kubernetes/gpu/nvidia-device-plugin.yaml" "${OUT_DIR}/"
 cp "${ROOT}/kubernetes/monitoring/namespace.yaml" "${OUT_DIR}/monitoring/"
 cp "${ROOT}/kubernetes/monitoring/servicemonitor.yaml" "${OUT_DIR}/monitoring/"
@@ -80,3 +83,4 @@ echo "  MODEL_NAME=${MODEL_NAME}"
 echo "  MODEL_PATH=${MODEL_PATH}"
 echo "  INSTANCE_TYPE=${INSTANCE_TYPE}"
 echo "  VLLM_REPLICAS=${VLLM_REPLICAS}"
+echo "  KEDA_MIN_REPLICAS=${KEDA_MIN_REPLICAS}"

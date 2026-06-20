@@ -55,6 +55,13 @@ helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-contro
   --wait --timeout 10m
 
 echo "Installing Karpenter (${KARPENTER_REPLICAS} replica(s))..."
+KARPENTER_CPU_REQUEST="1"
+KARPENTER_MEM_REQUEST="1Gi"
+if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
+  KARPENTER_CPU_REQUEST="250m"
+  KARPENTER_MEM_REQUEST="512Mi"
+fi
+
 helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter \
   --namespace kube-system \
   --version "${KARPENTER_CHART_VERSION}" \
@@ -63,10 +70,10 @@ helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter \
   --set settings.clusterEndpoint="${CLUSTER_ENDPOINT}" \
   --set settings.interruptionQueue="${INTERRUPTION_QUEUE}" \
   --set "serviceAccount.annotations.eks\.amazonaws\.com/role-arn=${KARPENTER_ROLE_ARN}" \
-  --set controller.resources.requests.cpu=1 \
-  --set controller.resources.requests.memory=1Gi \
-  --set controller.resources.limits.cpu=1 \
-  --set controller.resources.limits.memory=1Gi \
+  --set controller.resources.requests.cpu="${KARPENTER_CPU_REQUEST}" \
+  --set controller.resources.requests.memory="${KARPENTER_MEM_REQUEST}" \
+  --set controller.resources.limits.cpu="${KARPENTER_CPU_REQUEST}" \
+  --set controller.resources.limits.memory="${KARPENTER_MEM_REQUEST}" \
   --wait --timeout 10m
 
 echo "Controllers installed (${TF_ENVIRONMENT})."

@@ -11,6 +11,8 @@ spec:
   template:
     spec:
       restartPolicy: OnFailure
+      nodeSelector:
+        role: system
       containers:
         - name: download
           image: huggingface/huggingface_hub:0.26.2
@@ -42,11 +44,11 @@ spec:
               mountPath: /models
           resources:
             requests:
-              cpu: "500m"
-              memory: 1Gi
+              cpu: "100m"
+              memory: 256Mi
             limits:
-              cpu: "1"
-              memory: 2Gi
+              cpu: "500m"
+              memory: 512Mi
       volumes:
         - name: model-cache
           persistentVolumeClaim:

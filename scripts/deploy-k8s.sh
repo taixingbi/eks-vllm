@@ -30,9 +30,13 @@ kubectl apply -f "${OUT_DIR}/vllm/configmap.yaml"
 kubectl apply -f "${OUT_DIR}/vllm/pvc-efs.yaml"
 
 kubectl delete job/model-seed -n vllm --ignore-not-found
-kubectl apply -f "${OUT_DIR}/vllm/model-seed-job.yaml"
-if ! kubectl wait --for=condition=complete job/model-seed -n vllm --timeout=3600s 2>/dev/null; then
-  echo "model-seed job still running or already completed; continuing"
+if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
+  echo "Skipping model-seed on dev (vLLM init container downloads on GPU node)"
+else
+  kubectl apply -f "${OUT_DIR}/vllm/model-seed-job.yaml"
+  if ! kubectl wait --for=condition=complete job/model-seed -n vllm --timeout=3600s 2>/dev/null; then
+    echo "model-seed job still running or already completed; continuing"
+  fi
 fi
 
 kubectl apply -f "${OUT_DIR}/vllm/deployment.yaml"

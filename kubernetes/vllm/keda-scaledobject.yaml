@@ -10,7 +10,7 @@ spec:
     name: vllm-qwen
   pollingInterval: 30
   cooldownPeriod: 300
-  minReplicaCount: 2
+  minReplicaCount: __KEDA_MIN_REPLICAS__
   maxReplicaCount: 10
   advanced:
     horizontalPodAutoscalerConfig:
