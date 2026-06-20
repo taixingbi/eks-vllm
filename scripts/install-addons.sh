@@ -4,6 +4,7 @@ set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/env.sh"
 AWS_REGION="${AWS_REGION:-us-east-1}"
+EXTERNAL_SECRETS_CHART_VERSION="${EXTERNAL_SECRETS_CHART_VERSION:-2.6.0}"
 
 cd "$TF_DIR"
 EFS_CSI_ROLE_ARN=$(terraform output -raw efs_csi_role_arn)
@@ -21,6 +22,7 @@ helm upgrade --install aws-efs-csi-driver aws-efs-csi-driver/aws-efs-csi-driver 
 
 helm upgrade --install external-secrets external-secrets/external-secrets \
   --namespace external-secrets --create-namespace \
+  --version "${EXTERNAL_SECRETS_CHART_VERSION}" \
   --wait --timeout 10m
 
 helm upgrade --install keda kedacore/keda \
