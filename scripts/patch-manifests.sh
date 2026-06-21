@@ -24,9 +24,11 @@ INFERENCE_HOSTNAME="${INFERENCE_HOSTNAME:-inference.example.com}"
 if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
   VLLM_REPLICAS=1
   KEDA_MIN_REPLICAS=1
+  KARPENTER_INSTANCE_SIZES='"2xlarge", "4xlarge"'
 else
   VLLM_REPLICAS=2
   KEDA_MIN_REPLICAS=2
+  KARPENTER_INSTANCE_SIZES='"4xlarge"'
 fi
 
 mkdir -p "${OUT_DIR}/karpenter" "${OUT_DIR}/vllm" "${OUT_DIR}/monitoring"
@@ -46,8 +48,8 @@ patch_file() {
     -e "s|__VLLM_REPLICAS__|${VLLM_REPLICAS}|g" \
     -e "s|__KEDA_MIN_REPLICAS__|${KEDA_MIN_REPLICAS}|g" \
     -e "s|__CLUSTER_NAME_VALUE__|${CLUSTER_NAME}|g" \
+    -e "s|__KARPENTER_INSTANCE_SIZES__|${KARPENTER_INSTANCE_SIZES}|g" \
     -e "s|INSTANCE_FAMILY|${INSTANCE_FAMILY}|g" \
-    -e "s|INSTANCE_SIZE|${INSTANCE_SIZE}|g" \
     "$src" > "$dst"
 }
 
@@ -83,5 +85,6 @@ echo "Patched manifests written to ${OUT_DIR} (${TF_ENVIRONMENT})"
 echo "  MODEL_NAME=${MODEL_NAME}"
 echo "  MODEL_PATH=${MODEL_PATH}"
 echo "  INSTANCE_TYPE=${INSTANCE_TYPE}"
+echo "  KARPENTER_INSTANCE_SIZES=[${KARPENTER_INSTANCE_SIZES}]"
 echo "  VLLM_REPLICAS=${VLLM_REPLICAS}"
 echo "  KEDA_MIN_REPLICAS=${KEDA_MIN_REPLICAS}"

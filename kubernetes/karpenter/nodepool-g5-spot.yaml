@@ -19,7 +19,7 @@ spec:
           values: ["INSTANCE_FAMILY"]
         - key: karpenter.k8s.aws/instance-size
           operator: In
-          values: ["INSTANCE_SIZE"]
+          values: [__KARPENTER_INSTANCE_SIZES__]
         - key: karpenter.sh/capacity-type
           operator: In
           values: ["spot"]

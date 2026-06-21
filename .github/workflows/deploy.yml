@@ -50,7 +50,7 @@ jobs:
       AWS_REGION: us-east-1
       TF_IN_AUTOMATION: true
       TF_ENVIRONMENT: ${{ needs.resolve-environment.outputs.environment }}
-      INSTANCE_TYPE: ${{ vars.INSTANCE_TYPE }}
+      INSTANCE_TYPE: ${{ vars.INSTANCE_TYPE || 'g5.4xlarge' }}
       MODEL_NAME: ${{ vars.MODEL_NAME }}
 
     steps:

@@ -25,8 +25,7 @@ case "${TF_ENVIRONMENT}" in
     ;;
   dev)
     export HF_SECRET_NAME="${HF_SECRET_NAME:-qwen-vllm-dev/hf-token}"
-    # Default to g5.2xlarge (8 vCPU) for typical new-account G/VT quota of 8
-    export INSTANCE_TYPE="${INSTANCE_TYPE:-g5.2xlarge}"
+    export INSTANCE_TYPE="${INSTANCE_TYPE:-g5.4xlarge}"
     ;;
 esac
 export MODEL_NAME="${MODEL_NAME:-Qwen/Qwen3-8B}"
