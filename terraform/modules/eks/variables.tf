@@ -15,8 +15,20 @@ variable "vpc_id" {
 }
 
 variable "private_subnet_ids" {
-  description = "Private subnet IDs for the cluster and node group"
+  description = "Private subnet IDs for the cluster control plane"
   type        = list(string)
+}
+
+variable "public_subnet_ids" {
+  description = "Public subnet IDs for node groups when assign_public_ipv4_to_nodes is true"
+  type        = list(string)
+  default     = []
+}
+
+variable "assign_public_ipv4_to_nodes" {
+  description = "Launch system and Karpenter nodes in public subnets with a public IPv4 address"
+  type        = bool
+  default     = true
 }
 
 variable "system_node_instance_types" {

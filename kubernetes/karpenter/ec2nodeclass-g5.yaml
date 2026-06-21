@@ -14,9 +14,11 @@ spec:
   amiSelectorTerms:
     - alias: al2023@latest
   role: KARPENTER_NODE_ROLE_NAME
+  associatePublicIPAddress: true
   subnetSelectorTerms:
     - tags:
         karpenter.sh/discovery: CLUSTER_NAME
+        kubernetes.io/role/elb: "1"
   securityGroupSelectorTerms:
     - tags:
         karpenter.sh/discovery: CLUSTER_NAME

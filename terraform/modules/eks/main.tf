@@ -6,7 +6,7 @@ module "eks" {
   cluster_version = var.cluster_version
 
   vpc_id     = var.vpc_id
-  subnet_ids = var.private_subnet_ids
+  subnet_ids = distinct(concat(var.private_subnet_ids, var.public_subnet_ids))
 
   cluster_endpoint_public_access  = true
   cluster_endpoint_private_access = true
@@ -38,6 +38,7 @@ module "eks" {
       name           = "${var.cluster_name}-system"
       instance_types = var.system_node_instance_types
       capacity_type  = "ON_DEMAND"
+      subnet_ids     = var.assign_public_ipv4_to_nodes ? var.public_subnet_ids : var.private_subnet_ids
 
       min_size     = var.system_node_min_size
       max_size     = var.system_node_max_size
