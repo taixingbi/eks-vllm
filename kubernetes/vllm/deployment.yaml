@@ -110,10 +110,6 @@ spec:
                   name: hf-token
                   key: token
                   optional: true
-          command:
-            - python
-            - -m
-            - vllm.entrypoints.openai.api_server
           args:
             - --model
             - __MODEL_PATH_VALUE__
