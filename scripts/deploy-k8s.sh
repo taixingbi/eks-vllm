@@ -12,22 +12,25 @@ aws eks update-kubeconfig --region "${AWS_REGION}" --name "${CLUSTER_NAME}"
 
 "${ROOT}/scripts/patch-manifests.sh"
 
-TMP_SECRETS=$(mktemp)
-trap 'rm -f "$TMP_SECRETS"' EXIT
-sed "s|qwen-vllm/hf-token|${HF_SECRET_NAME}|g" \
-  "${ROOT}/kubernetes/vllm/external-secret-hf.yaml" > "${TMP_SECRETS}"
+if [[ "${TF_ENVIRONMENT}" != "dev" ]]; then
+  TMP_SECRETS=$(mktemp)
+  trap 'rm -f "$TMP_SECRETS"' EXIT
+  sed "s|qwen-vllm/hf-token|${HF_SECRET_NAME}|g" \
+    "${ROOT}/kubernetes/vllm/external-secret-hf.yaml" > "${TMP_SECRETS}"
 
-kubectl apply -f "${ROOT}/kubernetes/vllm/cluster-secret-store.yaml"
+  kubectl apply -f "${ROOT}/kubernetes/vllm/cluster-secret-store.yaml"
+  kubectl apply -f "${TMP_SECRETS}"
+
+  echo "Waiting for External Secrets (up to 5m)..."
+  kubectl wait --for=condition=Ready clustersecretstore/aws-secrets-manager --timeout=300s 2>/dev/null || {
+    echo "Warning: ClusterSecretStore not Ready — run: make install-addons TF_ENVIRONMENT=${TF_ENVIRONMENT}"
+  }
+  kubectl wait --for=condition=Ready externalsecret/hf-token -n vllm --timeout=300s 2>/dev/null || {
+    echo "Warning: hf-token ExternalSecret not Ready — continuing (HF_TOKEN is optional for public models)"
+  }
+fi
+
 kubectl apply -f "${ROOT}/kubernetes/vllm/namespace.yaml"
-kubectl apply -f "${TMP_SECRETS}"
-
-echo "Waiting for External Secrets (up to 5m)..."
-kubectl wait --for=condition=Ready clustersecretstore/aws-secrets-manager --timeout=300s 2>/dev/null || {
-  echo "Warning: ClusterSecretStore not Ready — run: make install-addons TF_ENVIRONMENT=${TF_ENVIRONMENT}"
-}
-kubectl wait --for=condition=Ready externalsecret/hf-token -n vllm --timeout=300s 2>/dev/null || {
-  echo "Warning: hf-token ExternalSecret not Ready — continuing (HF_TOKEN is optional for public models)"
-}
 
 echo "Clearing stuck Karpenter GPU nodeclaims (prevents NodePool limit exhaustion)..."
 kubectl delete nodeclaims -l karpenter.sh/nodepool=g5-ondemand --ignore-not-found --wait=false 2>/dev/null || true
@@ -36,6 +39,7 @@ kubectl apply -f "${OUT_DIR}/karpenter/ec2nodeclass-g5.yaml"
 kubectl apply -f "${OUT_DIR}/karpenter/nodepool-g5-ondemand.yaml"
 if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
   kubectl -n vllm scale deployment vllm-qwen --replicas=1 2>/dev/null || true
+  kubectl delete scaledobject vllm-qwen -n vllm --ignore-not-found 2>/dev/null || true
 fi
 if [[ "${TF_ENVIRONMENT}" != "dev" ]]; then
   kubectl apply -f "${OUT_DIR}/karpenter/nodepool-g5-spot.yaml"
@@ -60,13 +64,17 @@ kubectl apply -f "${OUT_DIR}/vllm/deployment.yaml"
 kubectl -n vllm delete rs -l app=vllm-qwen --field-selector='status.replicas=0' --ignore-not-found 2>/dev/null || true
 kubectl apply -f "${OUT_DIR}/vllm/service.yaml"
 
-if [[ -n "${ACM_CERTIFICATE_ARN:-}" ]]; then
-  kubectl apply -f "${OUT_DIR}/vllm/ingress.yaml"
-else
-  echo "Skipping ingress (set ACM_CERTIFICATE_ARN to enable HTTPS ingress)"
-fi
+if [[ "${TF_ENVIRONMENT}" != "dev" ]]; then
+  if [[ -n "${ACM_CERTIFICATE_ARN:-}" ]]; then
+    kubectl apply -f "${OUT_DIR}/vllm/ingress.yaml"
+  else
+    echo "Skipping ingress (set ACM_CERTIFICATE_ARN to enable HTTPS ingress)"
+  fi
 
-kubectl apply -f "${OUT_DIR}/vllm/keda-scaledobject.yaml"
-kubectl apply -f "${OUT_DIR}/monitoring/"
+  kubectl apply -f "${OUT_DIR}/vllm/keda-scaledobject.yaml"
+  kubectl apply -f "${OUT_DIR}/monitoring/"
+else
+  echo "Skipping ingress, KEDA, and monitoring on dev (minimal path; use port-forward)"
+fi
 
 echo "Kubernetes deployment complete (${TF_ENVIRONMENT})."

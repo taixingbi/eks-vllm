@@ -12,11 +12,8 @@ AWS_EFS_CSI_CHART_VERSION="${AWS_EFS_CSI_CHART_VERSION:-3.1.7}"
 
 cd "$TF_DIR"
 EFS_CSI_ROLE_ARN=$(terraform output -raw efs_csi_role_arn)
-EXTERNAL_SECRETS_ROLE_ARN=$(terraform output -raw external_secrets_role_arn)
 
 helm repo add aws-efs-csi-driver https://kubernetes-sigs.github.io/aws-efs-csi-driver/ 2>/dev/null || true
-helm repo add external-secrets https://charts.external-secrets.io 2>/dev/null || true
-helm repo add kedacore https://kedacore.github.io/charts 2>/dev/null || true
 helm repo update
 
 helm_upgrade_install aws-efs-csi-driver aws-efs-csi-driver/aws-efs-csi-driver \
@@ -24,6 +21,18 @@ helm_upgrade_install aws-efs-csi-driver aws-efs-csi-driver/aws-efs-csi-driver \
   --version "${AWS_EFS_CSI_CHART_VERSION}" \
   --set controller.serviceAccount.annotations."eks\.amazonaws\.com/role-arn"="${EFS_CSI_ROLE_ARN}" \
   --wait --timeout 10m
+
+if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
+  echo "Skipping External Secrets, KEDA, and Prometheus on dev (minimal path)"
+  echo "Cluster add-ons installed (${TF_ENVIRONMENT})."
+  exit 0
+fi
+
+EXTERNAL_SECRETS_ROLE_ARN=$(terraform output -raw external_secrets_role_arn)
+
+helm repo add external-secrets https://charts.external-secrets.io 2>/dev/null || true
+helm repo add kedacore https://kedacore.github.io/charts 2>/dev/null || true
+helm repo update
 
 helm_upgrade_install external-secrets external-secrets/external-secrets \
   --namespace external-secrets --create-namespace \
@@ -41,18 +50,6 @@ PROM_HELM_ARGS=(
   --version "${KUBE_PROMETHEUS_STACK_CHART_VERSION}"
   --wait --timeout 15m
 )
-if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
-  PROM_HELM_ARGS+=(
-    --set alertmanager.enabled=false
-    --set grafana.enabled=false
-    --set kubeStateMetrics.enabled=false
-    --set nodeExporter.enabled=false
-    --set prometheus.prometheusSpec.resources.requests.cpu=100m
-    --set prometheus.prometheusSpec.resources.requests.memory=256Mi
-    --set prometheus.prometheusSpec.resources.limits.cpu=500m
-    --set prometheus.prometheusSpec.resources.limits.memory=512Mi
-  )
-fi
 
 # OCI avoids GitHub release asset 500s from prometheus-community Helm repo.
 helm_upgrade_install kube-prometheus-stack \

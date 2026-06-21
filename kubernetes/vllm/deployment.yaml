@@ -118,11 +118,11 @@ spec:
             - --port
             - "8000"
             - --dtype
-            - bfloat16
+            - __VLLM_DTYPE__
             - --max-model-len
-            - "8192"
+            - __VLLM_MAX_MODEL_LEN__
             - --gpu-memory-utilization
-            - "0.90"
+            - __VLLM_GPU_MEMORY_UTIL__
             - --enable-prefix-caching
             - --disable-log-requests
           resources:
@@ -139,7 +139,7 @@ spec:
               path: /health
               port: http
             periodSeconds: 10
-            failureThreshold: 30
+            failureThreshold: __VLLM_STARTUP_FAILURE_THRESHOLD__
             timeoutSeconds: 5
           readinessProbe:
             httpGet:

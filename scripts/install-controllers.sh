@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install ALB Controller and Karpenter via Helm (after Terraform creates IAM + EKS).
+# Install Karpenter via Helm (ALB Controller on prod only).
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/env.sh"
@@ -49,17 +49,21 @@ fi
 helm repo add eks https://aws.github.io/eks-charts 2>/dev/null || true
 helm repo update
 
-echo "Installing AWS Load Balancer Controller..."
-helm_upgrade_install aws-load-balancer-controller eks/aws-load-balancer-controller \
-  --namespace kube-system \
-  --version "${ALB_CHART_VERSION}" \
-  --set clusterName="${CLUSTER_NAME}" \
-  --set serviceAccount.create=true \
-  --set serviceAccount.name=aws-load-balancer-controller \
-  --set "serviceAccount.annotations.eks\.amazonaws\.com/role-arn=${ALB_ROLE_ARN}" \
-  --set region="${AWS_REGION}" \
-  --set vpcId="${VPC_ID}" \
-  --wait --timeout 10m
+if [[ "${TF_ENVIRONMENT}" != "dev" ]]; then
+  echo "Installing AWS Load Balancer Controller..."
+  helm_upgrade_install aws-load-balancer-controller eks/aws-load-balancer-controller \
+    --namespace kube-system \
+    --version "${ALB_CHART_VERSION}" \
+    --set clusterName="${CLUSTER_NAME}" \
+    --set serviceAccount.create=true \
+    --set serviceAccount.name=aws-load-balancer-controller \
+    --set "serviceAccount.annotations.eks\.amazonaws\.com/role-arn=${ALB_ROLE_ARN}" \
+    --set region="${AWS_REGION}" \
+    --set vpcId="${VPC_ID}" \
+    --wait --timeout 10m
+else
+  echo "Skipping ALB Controller on dev (minimal path; use port-forward)"
+fi
 
 echo "Installing Karpenter (${KARPENTER_REPLICAS} replica(s))..."
 KARPENTER_CPU_REQUEST="1"

@@ -21,15 +21,15 @@ export OUT_DIR="${OUT_DIR:-${ROOT}/kubernetes/.generated/${TF_ENVIRONMENT}}"
 case "${TF_ENVIRONMENT}" in
   prod)
     export HF_SECRET_NAME="${HF_SECRET_NAME:-qwen-vllm/hf-token}"
-    export INSTANCE_TYPE="${INSTANCE_TYPE:-g5.4xlarge}"
+    if [[ -z "${INSTANCE_TYPE:-}" ]]; then export INSTANCE_TYPE=g5.4xlarge; else export INSTANCE_TYPE; fi
+    if [[ -z "${MODEL_NAME:-}" ]]; then export MODEL_NAME=Qwen/Qwen3-8B; else export MODEL_NAME; fi
     ;;
   dev)
     export HF_SECRET_NAME="${HF_SECRET_NAME:-qwen-vllm-dev/hf-token}"
-    # g5.2xlarge fits default G/VT vCPU quota of 8; use g5.4xlarge only after quota increase
-    export INSTANCE_TYPE="${INSTANCE_TYPE:-g5.2xlarge}"
+    if [[ -z "${INSTANCE_TYPE:-}" ]]; then export INSTANCE_TYPE=g5.2xlarge; else export INSTANCE_TYPE; fi
+    if [[ -z "${MODEL_NAME:-}" ]]; then export MODEL_NAME=Qwen/Qwen2.5-0.5B-Instruct; else export MODEL_NAME; fi
     ;;
 esac
-export MODEL_NAME="${MODEL_NAME:-Qwen/Qwen3-8B}"
 export MODEL_BASENAME="${MODEL_NAME##*/}"
 export MODEL_PATH="/models/${MODEL_BASENAME}"
 export INSTANCE_FAMILY="${INSTANCE_TYPE%%.*}"

@@ -95,6 +95,7 @@ jobs:
         run: ./scripts/install-addons.sh
 
       - name: Sync HF token to Secrets Manager
+        if: needs.resolve-environment.outputs.environment != 'dev'
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: ./scripts/sync-hf-secret.sh
@@ -115,6 +116,27 @@ jobs:
 
       - name: Wait for vLLM rollout
         run: |
-          kubectl rollout status deployment/vllm-qwen -n vllm --timeout=20m
+          if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
+            kubectl rollout status deployment/vllm-qwen -n vllm --timeout=45m
+          else
+            kubectl rollout status deployment/vllm-qwen -n vllm --timeout=20m
+          fi
           kubectl get pods -n vllm
           kubectl get nodes -l workload=gpu 2>/dev/null || true
+
+      - name: Smoke test inference (dev)
+        if: needs.resolve-environment.outputs.environment == 'dev'
+        run: |
+          MODEL_BASENAME="${MODEL_NAME##*/}"
+          kubectl port-forward -n vllm svc/vllm-qwen 8000:8000 &
+          PF_PID=$!
+          trap "kill ${PF_PID} 2>/dev/null || true" EXIT
+          for _ in $(seq 1 60); do
+            if curl -sf http://localhost:8000/v1/models >/dev/null 2>&1; then
+              break
+            fi
+            sleep 10
+          done
+          curl -sf http://localhost:8000/v1/chat/completions \
+            -H "Content-Type: application/json" \
+            -d "{\"model\":\"${MODEL_BASENAME}\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"max_tokens\":32}"
