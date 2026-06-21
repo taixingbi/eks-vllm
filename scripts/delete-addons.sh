@@ -21,12 +21,24 @@ fi
 
 echo "Uninstalling Helm add-ons from ${CLUSTER_NAME}..."
 
-helm uninstall kube-prometheus-stack -n monitoring --ignore-not-found
-helm uninstall keda -n keda --ignore-not-found
-helm uninstall external-secrets -n external-secrets --ignore-not-found
-helm uninstall aws-efs-csi-driver -n kube-system --ignore-not-found
-helm uninstall karpenter -n kube-system --ignore-not-found
-helm uninstall aws-load-balancer-controller -n kube-system --ignore-not-found
+helm_uninstall() {
+  local release=$1
+  local namespace=$2
+  if ! helm list -n "${namespace}" -q 2>/dev/null | grep -Fxq "${release}"; then
+    echo "Helm release ${release} not installed in ${namespace}, skipping"
+    return 0
+  fi
+  if ! helm uninstall "${release}" -n "${namespace}"; then
+    echo "Warning: failed to uninstall ${release} from ${namespace}, continuing"
+  fi
+}
+
+helm_uninstall kube-prometheus-stack monitoring
+helm_uninstall keda keda
+helm_uninstall external-secrets external-secrets
+helm_uninstall aws-efs-csi-driver kube-system
+helm_uninstall karpenter kube-system
+helm_uninstall aws-load-balancer-controller kube-system
 
 kubectl delete namespace monitoring --ignore-not-found --wait=false
 kubectl delete namespace keda --ignore-not-found --wait=false

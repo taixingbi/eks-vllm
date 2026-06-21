@@ -36,7 +36,6 @@ if [[ -d "${OUT_DIR}/monitoring" ]]; then
   echo "Deleting monitoring resources..."
   kubectl_delete -f "${OUT_DIR}/monitoring/"
 fi
-kubectl_delete namespace monitoring
 
 echo "Deleting Karpenter GPU pools..."
 kubectl_delete_crd_kind nodepools.karpenter.sh nodepool g5-ondemand g5-spot
