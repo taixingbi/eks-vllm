@@ -48,6 +48,10 @@ else
   ROLLING_MAX_UNAVAILABLE=0
   PDB_MIN_AVAILABLE=1
 fi
+
+# NodePool instance-size follows INSTANCE_TYPE (g5.2xlarge -> "2xlarge", g5.4xlarge -> "4xlarge").
+INSTANCE_FAMILY="${INSTANCE_TYPE%%.*}"
+INSTANCE_SIZE="${INSTANCE_TYPE#*.}"
 KARPENTER_INSTANCE_SIZES="\"${INSTANCE_SIZE}\""
 
 mkdir -p "${OUT_DIR}/karpenter" "${OUT_DIR}/vllm" "${OUT_DIR}/monitoring"
