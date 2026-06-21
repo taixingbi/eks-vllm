@@ -34,6 +34,9 @@ kubectl delete nodeclaims -l karpenter.sh/nodepool=g5-ondemand --ignore-not-foun
 
 kubectl apply -f "${OUT_DIR}/karpenter/ec2nodeclass-g5.yaml"
 kubectl apply -f "${OUT_DIR}/karpenter/nodepool-g5-ondemand.yaml"
+if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
+  kubectl -n vllm scale deployment vllm-qwen --replicas=1 2>/dev/null || true
+fi
 if [[ "${TF_ENVIRONMENT}" != "dev" ]]; then
   kubectl apply -f "${OUT_DIR}/karpenter/nodepool-g5-spot.yaml"
 else
@@ -54,6 +57,7 @@ else
 fi
 
 kubectl apply -f "${OUT_DIR}/vllm/deployment.yaml"
+kubectl -n vllm delete rs -l app=vllm-qwen --field-selector='status.replicas=0' --ignore-not-found 2>/dev/null || true
 kubectl apply -f "${OUT_DIR}/vllm/service.yaml"
 
 if [[ -n "${ACM_CERTIFICATE_ARN:-}" ]]; then

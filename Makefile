@@ -1,4 +1,4 @@
-.PHONY: bootstrap init plan apply patch install-controllers install-addons sync-hf-secret build-image deploy-k8s delete-k8s delete-addons destroy
+.PHONY: bootstrap init plan apply patch install-controllers install-addons sync-hf-secret build-image deploy-k8s delete-k8s delete-addons destroy fix-gpu
 
 TF_ENVIRONMENT ?= prod
 TF_DIR = terraform/environments/$(TF_ENVIRONMENT)
@@ -32,6 +32,9 @@ build-image:
 
 deploy-k8s:
 	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/deploy-k8s.sh
+
+fix-gpu:
+	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/fix-gpu-scheduling.sh
 
 delete-k8s:
 	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/delete-k8s.sh

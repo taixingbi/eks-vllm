@@ -26,9 +26,6 @@ spec:
         - key: kubernetes.io/arch
           operator: In
           values: ["amd64"]
-        - key: karpenter.k8s.aws/instance-gpu-count
-          operator: Gt
-          values: ["0"]
       taints:
         - key: nvidia.com/gpu
           value: "true"
