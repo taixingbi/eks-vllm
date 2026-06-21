@@ -120,9 +120,9 @@ spec:
             - --dtype
             - __VLLM_DTYPE__
             - --max-model-len
-            - __VLLM_MAX_MODEL_LEN__
+            - "__VLLM_MAX_MODEL_LEN__"
             - --gpu-memory-utilization
-            - __VLLM_GPU_MEMORY_UTIL__
+            - "__VLLM_GPU_MEMORY_UTIL__"
             - --enable-prefix-caching
             - --disable-log-requests
           resources:
