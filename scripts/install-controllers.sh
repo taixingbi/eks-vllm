@@ -4,6 +4,7 @@ set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/env.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/cluster.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/helm.sh"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 ALB_CHART_VERSION="${ALB_CHART_VERSION:-1.8.2}"
 KARPENTER_CHART_VERSION="${KARPENTER_CHART_VERSION:-1.0.8}"
@@ -49,7 +50,7 @@ helm repo add eks https://aws.github.io/eks-charts 2>/dev/null || true
 helm repo update
 
 echo "Installing AWS Load Balancer Controller..."
-helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+helm_upgrade_install aws-load-balancer-controller eks/aws-load-balancer-controller \
   --namespace kube-system \
   --version "${ALB_CHART_VERSION}" \
   --set clusterName="${CLUSTER_NAME}" \
@@ -68,7 +69,7 @@ if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
   KARPENTER_MEM_REQUEST="512Mi"
 fi
 
-helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter \
+helm_upgrade_install karpenter oci://public.ecr.aws/karpenter/karpenter \
   --namespace kube-system \
   --version "${KARPENTER_CHART_VERSION}" \
   --set replicas="${KARPENTER_REPLICAS}" \
