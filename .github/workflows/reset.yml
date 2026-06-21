@@ -1,0 +1,97 @@
+name: Reset
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - prod
+      action:
+        description: |
+          fix-gpu — clear stale NodeClaims/GPU nodes, re-apply vLLM (keeps cluster + PVC)
+          redeploy-k8s — patch + kubectl apply (no Terraform/Helm)
+          reset-k8s — delete all vLLM/Karpenter workloads, then redeploy-k8s
+        required: true
+        default: fix-gpu
+        type: choice
+        options:
+          - fix-gpu
+          - redeploy-k8s
+          - reset-k8s
+
+permissions:
+  contents: read
+
+jobs:
+  reset:
+    name: Reset (${{ inputs.action }} / ${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      AWS_REGION: us-east-1
+      TF_IN_AUTOMATION: true
+      TF_ENVIRONMENT: ${{ inputs.environment }}
+      INSTANCE_TYPE: ${{ vars.INSTANCE_TYPE }}
+      MODEL_NAME: ${{ vars.MODEL_NAME }}
+      AUTO_APPROVE: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.6
+
+      - name: Terraform Init
+        working-directory: terraform/environments/${{ inputs.environment }}
+        run: terraform init
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubectl
+        run: |
+          CLUSTER_NAME=$(cd "terraform/environments/${TF_ENVIRONMENT}" && terraform output -raw cluster_name)
+          aws eks update-kubeconfig --region "${AWS_REGION}" --name "${CLUSTER_NAME}"
+
+      - name: Fix GPU scheduling
+        if: inputs.action == 'fix-gpu'
+        run: ./scripts/fix-gpu-scheduling.sh
+
+      - name: Delete Kubernetes workloads
+        if: inputs.action == 'reset-k8s'
+        run: ./scripts/delete-k8s.sh
+
+      - name: Redeploy Kubernetes manifests
+        if: inputs.action == 'redeploy-k8s' || inputs.action == 'reset-k8s'
+        env:
+          ACM_CERTIFICATE_ARN: ${{ secrets.ACM_CERTIFICATE_ARN }}
+          INFERENCE_HOSTNAME: ${{ secrets.INFERENCE_HOSTNAME }}
+        run: ./scripts/deploy-k8s.sh
+
+      - name: Wait for vLLM rollout
+        run: |
+          if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
+            kubectl rollout status deployment/vllm-qwen -n vllm --timeout=45m
+          else
+            kubectl rollout status deployment/vllm-qwen -n vllm --timeout=20m
+          fi
+          kubectl get pods -n vllm -o wide
+          kubectl get nodes -l workload=gpu 2>/dev/null || true

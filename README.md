@@ -38,6 +38,7 @@ scripts/
   install-controllers.sh # ALB Controller + Karpenter (Helm, post-Terraform)
   install-addons.sh    # Helm add-ons (EFS CSI, External Secrets, KEDA, Prometheus)
   deploy-k8s.sh        # Patch + kubectl apply
+  fix-gpu-scheduling.sh # Clear stale GPU NodeClaims/nodes, re-apply vLLM
   delete-k8s.sh        # Remove K8s workloads
   delete-addons.sh     # Uninstall Helm add-ons
   destroy.sh           # Full teardown (K8s → Helm → terraform destroy)
@@ -52,6 +53,7 @@ Run all `make` commands from the **repository root** (`eks-vllm/`), not from `te
 |---|---|
 | `make apply TF_ENVIRONMENT=prod` | Deploy AWS infrastructure |
 | `make deploy-k8s TF_ENVIRONMENT=prod` | Apply Kubernetes manifests |
+| `make fix-gpu TF_ENVIRONMENT=prod` | Clear stale GPU NodeClaims/nodes, re-apply vLLM |
 | `make delete-k8s TF_ENVIRONMENT=prod` | Remove K8s workloads (keeps cluster) |
 | `make destroy TF_ENVIRONMENT=prod` | Delete everything for an environment |
 
@@ -117,9 +119,29 @@ The IAM user needs permissions for Terraform (VPC, EKS, EFS, ECR, IAM, etc.), EC
 
 Pull requests targeting `dev` or `main` that touch `terraform/**` run `terraform plan` for the matching environment.
 
+### Reset (manual recovery)
+
+**Actions → Reset → Run workflow** — does **not** run Terraform or Helm. Use when the cluster exists but vLLM is stuck (Pending GPU pods, evicted rollouts, stale NodeClaims).
+
+| Action | Local equivalent | What it does |
+|---|---|---|
+| `fix-gpu` | `make fix-gpu` | Delete stale NodeClaims + GPU nodes, re-apply vLLM (keeps PVC/model cache) |
+| `redeploy-k8s` | `make deploy-k8s` | Patch manifests from Terraform outputs and `kubectl apply` |
+| `reset-k8s` | `make delete-k8s` then `make deploy-k8s` | Remove vLLM/Karpenter workloads, then redeploy |
+
+Uses the same concurrency group as **Deploy** (only one run per environment at a time). Prefer **`fix-gpu` on dev** first; use **`reset-k8s`** only when workloads are badly corrupted (deletes the model PVC). Add required reviewers on the **prod** GitHub Environment before allowing `reset-k8s` there.
+
 ### Local teardown
 
 Run from the repository root:
+
+**In-cluster reset (keeps EKS + Terraform; preferred over destroy)**
+
+| Tier | Command | When to use |
+|---|---|---|
+| Light | `make fix-gpu TF_ENVIRONMENT=dev` | Pod Pending/Evicted, `karpenter.sh/disrupted`, NodeClaim quota stuck |
+| Medium | `make deploy-k8s TF_ENVIRONMENT=dev` | Re-apply manifests after config changes (also clears stale NodeClaims) |
+| Heavy | `make delete-k8s TF_ENVIRONMENT=dev && make deploy-k8s TF_ENVIRONMENT=dev` | vLLM namespace corrupted; deletes PVC (model may re-download) |
 
 Remove workloads only (keeps EKS cluster and Terraform infrastructure):
 
@@ -304,16 +326,20 @@ kubectl get pods -n vllm -w
 | `ImagePullBackOff` on `huggingface/huggingface_hub` | That Docker Hub image does not exist | Run `make build-image TF_ENVIRONMENT=dev` (pushes `:model-downloader` to ECR), delete the job, redeploy |
 | No GPU nodes | Karpenter only adds GPU nodes when pods request `nvidia.com/gpu` | Wait for vLLM deployment after model-seed completes (prod) or after deploy applies vLLM (dev) |
 | `VcpuLimitExceeded` / GPU node won't launch | Default G/VT vCPU quota is often 8; `g5.4xlarge` needs 16 | Dev defaults to `g5.2xlarge`. For prod, request quota increase: [AWS EC2 quota request](https://console.aws.amazon.com/servicequotas/) → **Running On-Demand G and VT instances** → at least 32 |
+| Pod Pending, `karpenter.sh/disrupted`, many NodeClaims | Stale GPU node/NodeClaim after evicted rollout | `make fix-gpu TF_ENVIRONMENT=dev` or **Actions → Reset → fix-gpu** |
+| `no such host` on kubectl | Stale kubeconfig after cluster recreate | `make kubeconfig-dev` or `aws eks update-kubeconfig --region us-east-1 --name qwen-vllm-dev` |
 | Wrong cluster / stale kubeconfig | Context points at destroyed env | `make kubeconfig-dev` or `make kubeconfig-prod` from repo root |
 
 ```bash
-# Port-forward for local test
+# Port-forward for local test (dev model path)
 kubectl port-forward -n vllm svc/vllm-qwen 8000:8000
+
+curl http://localhost:8000/v1/models
 
 curl http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "Qwen3-8B",
+    "model": "/models/Qwen2.5-0.5B-Instruct",
     "messages": [{"role": "user", "content": "Hello"}],
     "max_tokens": 64
   }'
