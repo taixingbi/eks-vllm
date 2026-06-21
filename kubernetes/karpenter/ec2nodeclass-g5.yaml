@@ -18,7 +18,6 @@ spec:
   subnetSelectorTerms:
     - tags:
         karpenter.sh/discovery: CLUSTER_NAME
-        kubernetes.io/role/elb: "1"
   securityGroupSelectorTerms:
     - tags:
         karpenter.sh/discovery: CLUSTER_NAME

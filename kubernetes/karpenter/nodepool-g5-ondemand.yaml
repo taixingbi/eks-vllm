@@ -35,8 +35,8 @@ spec:
           effect: NoSchedule
       expireAfter: 720h
   limits:
-    cpu: "32"
-    memory: 128Gi
+    cpu: "__NODEPOOL_CPU_LIMIT__"
+    memory: __NODEPOOL_MEMORY_LIMIT__
   disruption:
     consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: 30m
