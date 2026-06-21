@@ -29,6 +29,9 @@ kubectl wait --for=condition=Ready externalsecret/hf-token -n vllm --timeout=300
   echo "Warning: hf-token ExternalSecret not Ready — continuing (HF_TOKEN is optional for public models)"
 }
 
+echo "Clearing stuck Karpenter GPU nodeclaims (prevents NodePool limit exhaustion)..."
+kubectl delete nodeclaims -l karpenter.sh/nodepool=g5-ondemand --ignore-not-found --wait=false 2>/dev/null || true
+
 kubectl apply -f "${OUT_DIR}/karpenter/ec2nodeclass-g5.yaml"
 kubectl apply -f "${OUT_DIR}/karpenter/nodepool-g5-ondemand.yaml"
 if [[ "${TF_ENVIRONMENT}" != "dev" ]]; then
