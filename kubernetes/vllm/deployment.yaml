@@ -13,8 +13,8 @@ spec:
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
+      maxSurge: __ROLLING_MAX_SURGE__
+      maxUnavailable: __ROLLING_MAX_UNAVAILABLE__
   template:
     metadata:
       labels:
@@ -184,7 +184,7 @@ metadata:
   name: vllm-qwen
   namespace: vllm
 spec:
-  minAvailable: 1
+  minAvailable: __PDB_MIN_AVAILABLE__
   selector:
     matchLabels:
       app: vllm-qwen
