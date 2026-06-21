@@ -132,11 +132,11 @@ spec:
           resources:
             requests:
               cpu: "2"
-              memory: "16Gi"
+              memory: "12Gi"
               nvidia.com/gpu: "1"
             limits:
               cpu: "6"
-              memory: "28Gi"
+              memory: "24Gi"
               nvidia.com/gpu: "1"
           startupProbe:
             httpGet:
