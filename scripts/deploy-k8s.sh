@@ -66,12 +66,15 @@ kubectl apply -f "${OUT_DIR}/vllm/deployment.yaml"
 kubectl -n vllm delete rs -l app=vllm-qwen --field-selector='status.replicas=0' --ignore-not-found 2>/dev/null || true
 kubectl apply -f "${OUT_DIR}/vllm/service.yaml"
 
-if [[ "${TF_ENVIRONMENT}" != "dev" ]]; then
+if [[ "${ENABLE_ALB}" == "1" ]]; then
   if [[ -n "${ACM_CERTIFICATE_ARN:-}" ]]; then
     kubectl apply -f "${OUT_DIR}/vllm/ingress.yaml"
   else
-    echo "Skipping ingress (set ACM_CERTIFICATE_ARN to enable HTTPS ingress)"
+    echo "Skipping ingress (set ACM_CERTIFICATE_ARN and INFERENCE_HOSTNAME for HTTPS ALB)"
   fi
+elif [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
+  echo "Skipping ALB ingress on dev (minimal path; use port-forward)"
+  echo "Enable Step 8: DEV_ENABLE_ALB=1 with ACM_CERTIFICATE_ARN, then make apply-ingress TF_ENVIRONMENT=dev"
 fi
 
 if [[ "${ENABLE_KEDA}" == "1" ]]; then

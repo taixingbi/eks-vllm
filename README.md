@@ -35,7 +35,9 @@ docker/
   Dockerfile.vllm     # Pinned vLLM image
 scripts/
   patch-manifests.sh   # Inject Terraform outputs into manifests
-  install-controllers.sh # ALB Controller + Karpenter (Helm, post-Terraform)
+  install-controllers.sh # ALB Controller (optional on dev) + Karpenter
+  install-alb-controller.sh # ALB Controller only (Step 8)
+  apply-ingress.sh     # HTTPS ALB Ingress (Step 8)
   install-addons.sh    # Helm add-ons (EFS CSI; optional Prometheus on dev)
   apply-monitoring.sh  # ServiceMonitor + PrometheusRules (Step 6)
   apply-keda.sh        # KEDA ScaledObject (Step 7)
@@ -58,6 +60,7 @@ Run all `make` commands from the **repository root** (`eks-vllm/`), not from `te
 | `make fix-gpu TF_ENVIRONMENT=dev` | Clear stale GPU NodeClaims/nodes, re-apply vLLM |
 | `make install-prometheus TF_ENVIRONMENT=dev` | Step 6: slim Prometheus + vLLM metrics (after vLLM is Running) |
 | `make install-keda TF_ENVIRONMENT=dev` | Step 7: KEDA + ScaledObject (requires Step 6; also installs Prometheus) |
+| `make install-alb TF_ENVIRONMENT=dev` | Step 8: ALB Controller + HTTPS Ingress (requires ACM cert + hostname) |
 | `AUTO_APPROVE=1 make delete-k8s TF_ENVIRONMENT=prod` | Remove K8s workloads (keeps cluster) |
 | `AUTO_APPROVE=1 make destroy TF_ENVIRONMENT=prod` | Delete everything for an environment |
 
@@ -96,10 +99,11 @@ Create GitHub **Environments** named `dev` and `prod` (Settings → Environments
 | `MODEL_NAME` | `Qwen/Qwen3-8B` | HuggingFace model ID (weights + vLLM serve path) |
 | `DEV_ENABLE_PROMETHEUS` | *(unset)* | Set to `1` on **dev** to enable Step 6 (slim Prometheus + ServiceMonitor) |
 | `DEV_ENABLE_KEDA` | *(unset)* | Set to `1` on **dev** to enable Step 7 (KEDA + ScaledObject; also enables Prometheus) |
+| `DEV_ENABLE_ALB` | *(unset)* | Set to `1` on **dev** to enable Step 8 (ALB Controller + Ingress; needs ACM secret) |
 
 Dev uses 1 Karpenter replica (single system node); prod uses 2.
 
-Set repo-wide or **per-environment** variables under **Settings → Secrets and variables → Actions → Variables** (prefer **dev** / **prod** environments for `INSTANCE_TYPE`, `MODEL_NAME`, `DEV_ENABLE_PROMETHEUS`, and `DEV_ENABLE_KEDA`).
+Set repo-wide or **per-environment** variables under **Settings → Secrets and variables → Actions** (prefer **dev** / **prod** environments for `INSTANCE_TYPE`, `MODEL_NAME`, `DEV_ENABLE_*`).
 
 ### Per-environment secrets (dev / prod environments)
 
@@ -117,11 +121,11 @@ The IAM user needs permissions for Terraform (VPC, EKS, EFS, ECR, IAM, etc.), EC
 ### What the deploy workflow does
 
 1. `terraform apply` in `terraform/environments/<env>` (AWS + IAM only)
-2. Install Karpenter via Helm (`install-controllers.sh`; ALB Controller on prod only)
+2. Install Karpenter (+ ALB Controller when `DEV_ENABLE_ALB=1` or prod) via `install-controllers.sh`
 3. Install Helm add-ons: **dev** — EFS CSI only (optional Prometheus/KEDA when `DEV_ENABLE_*=1`); **prod** — full stack
 4. Sync `HF_TOKEN` → AWS Secrets Manager (prod only)
 5. Build and push vLLM image to ECR
-6. Patch and apply Kubernetes manifests (monitoring when `DEV_ENABLE_PROMETHEUS=1` or KEDA enabled; ScaledObject when `DEV_ENABLE_KEDA=1`)
+6. Patch and apply Kubernetes manifests (monitoring / KEDA / Ingress when respective `DEV_ENABLE_*=1`)
 
 Pull requests targeting `dev` or `main` that touch `terraform/**` run `terraform plan` for the matching environment.
 
@@ -179,6 +183,30 @@ Verify:
 kubectl get pods -n keda
 kubectl get scaledobject -n vllm
 kubectl describe scaledobject vllm-qwen -n vllm
+```
+
+### Dev Step 8 — ALB Ingress (optional)
+
+Enable **after** vLLM is Running (Steps 4–5). Requires **ACM certificate** and **hostname** in the GitHub **dev** environment secrets (`ACM_CERTIFICATE_ARN`, `INFERENCE_HOSTNAME`).
+
+**GitHub:** set `DEV_ENABLE_ALB=1`, then push or re-run Deploy.
+
+**Local:**
+
+```bash
+ACM_CERTIFICATE_ARN=arn:aws:acm:us-east-1:ACCOUNT:certificate/UUID \
+INFERENCE_HOSTNAME=dev.inference.example.com \
+make install-alb TF_ENVIRONMENT=dev
+```
+
+Verify:
+
+```bash
+kubectl get ingress vllm-qwen -n vllm
+kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
+
+# After ADDRESS appears (may take 2–5 min):
+curl https://dev.inference.example.com/v1/models
 ```
 
 ### Local teardown

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install Karpenter via Helm (ALB Controller on prod only).
+# Install Karpenter via Helm (ALB Controller when ENABLE_ALB=1).
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/env.sh"
@@ -49,7 +49,7 @@ fi
 helm repo add eks https://aws.github.io/eks-charts 2>/dev/null || true
 helm repo update
 
-if [[ "${TF_ENVIRONMENT}" != "dev" ]]; then
+if [[ "${ENABLE_ALB}" == "1" ]]; then
   echo "Installing AWS Load Balancer Controller..."
   helm_upgrade_install aws-load-balancer-controller eks/aws-load-balancer-controller \
     --namespace kube-system \
@@ -63,6 +63,7 @@ if [[ "${TF_ENVIRONMENT}" != "dev" ]]; then
     --wait --timeout 10m
 else
   echo "Skipping ALB Controller on dev (minimal path; use port-forward)"
+  echo "Enable Step 8: DEV_ENABLE_ALB=1 make install-alb TF_ENVIRONMENT=dev"
 fi
 
 echo "Installing Karpenter (${KARPENTER_REPLICAS} replica(s))..."

@@ -26,6 +26,9 @@ KEDA
 
 Step 8
 ALB
+  DEV_ENABLE_ALB=1 → make install-alb TF_ENVIRONMENT=dev
+  or GitHub dev var DEV_ENABLE_ALB=1 + Deploy
+  requires: ACM_CERTIFICATE_ARN + INFERENCE_HOSTNAME (dev environment secrets)
 
 Step 9
 Qwen 7B/8B
@@ -70,8 +73,8 @@ KEDA
 ⚠️ 需验证 ScaledObject Ready
 8
 ALB
-❌ dev 故意跳过（install-controllers.sh）
-❌ 未做
+✅ DEV_ENABLE_ALB=1（可选）
+⚠️ 需 ACM + hostname + kubectl get ingress ADDRESS
 9
 Qwen 7B/8B
 ❌ dev 默认仍是 0.5B

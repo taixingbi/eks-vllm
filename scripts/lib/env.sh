@@ -51,3 +51,10 @@ if [[ "${TF_ENVIRONMENT}" == "prod" ]] || [[ "${DEV_ENABLE_KEDA:-}" == "1" ]]; t
 else
   export ENABLE_KEDA=0
 fi
+
+# Prod always installs ALB; dev enables Step 8 with DEV_ENABLE_ALB=1.
+if [[ "${TF_ENVIRONMENT}" == "prod" ]] || [[ "${DEV_ENABLE_ALB:-}" == "1" ]]; then
+  export ENABLE_ALB=1
+else
+  export ENABLE_ALB=0
+fi

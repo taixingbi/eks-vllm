@@ -1,4 +1,4 @@
-.PHONY: bootstrap init plan apply patch install-controllers install-addons install-prometheus install-keda sync-hf-secret build-image deploy-k8s delete-k8s delete-addons destroy fix-gpu
+.PHONY: bootstrap init plan apply patch install-controllers install-addons install-prometheus install-keda install-alb sync-hf-secret build-image deploy-k8s delete-k8s delete-addons destroy fix-gpu
 
 TF_ENVIRONMENT ?= prod
 TF_DIR = terraform/environments/$(TF_ENVIRONMENT)
@@ -34,6 +34,11 @@ install-keda:
 	DEV_ENABLE_KEDA=1 TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/install-addons.sh
 	DEV_ENABLE_KEDA=1 TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/apply-monitoring.sh
 	DEV_ENABLE_KEDA=1 TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/apply-keda.sh
+
+# Step 8 on dev: ALB Controller + HTTPS Ingress (requires ACM_CERTIFICATE_ARN + INFERENCE_HOSTNAME).
+install-alb:
+	DEV_ENABLE_ALB=1 TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/install-alb-controller.sh
+	DEV_ENABLE_ALB=1 TF_ENVIRONMENT=$(TF_ENVIRONMENT) ACM_CERTIFICATE_ARN="$(ACM_CERTIFICATE_ARN)" INFERENCE_HOSTNAME="$(INFERENCE_HOSTNAME)" ./scripts/apply-ingress.sh
 
 sync-hf-secret:
 	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/sync-hf-secret.sh
