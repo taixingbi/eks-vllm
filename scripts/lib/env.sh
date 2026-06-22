@@ -36,8 +36,18 @@ export INSTANCE_FAMILY="${INSTANCE_TYPE%%.*}"
 export INSTANCE_SIZE="${INSTANCE_TYPE#*.}"
 
 # Prod always installs Prometheus; dev enables Step 6 with DEV_ENABLE_PROMETHEUS=1.
-if [[ "${TF_ENVIRONMENT}" == "prod" ]] || [[ "${DEV_ENABLE_PROMETHEUS:-}" == "1" ]]; then
+# KEDA (Step 7) requires Prometheus — enabling KEDA on dev also enables Prometheus.
+if [[ "${TF_ENVIRONMENT}" == "prod" ]] \
+  || [[ "${DEV_ENABLE_PROMETHEUS:-}" == "1" ]] \
+  || [[ "${DEV_ENABLE_KEDA:-}" == "1" ]]; then
   export ENABLE_PROMETHEUS=1
 else
   export ENABLE_PROMETHEUS=0
+fi
+
+# Prod always installs KEDA; dev enables Step 7 with DEV_ENABLE_KEDA=1.
+if [[ "${TF_ENVIRONMENT}" == "prod" ]] || [[ "${DEV_ENABLE_KEDA:-}" == "1" ]]; then
+  export ENABLE_KEDA=1
+else
+  export ENABLE_KEDA=0
 fi

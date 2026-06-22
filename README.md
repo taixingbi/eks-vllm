@@ -38,6 +38,7 @@ scripts/
   install-controllers.sh # ALB Controller + Karpenter (Helm, post-Terraform)
   install-addons.sh    # Helm add-ons (EFS CSI; optional Prometheus on dev)
   apply-monitoring.sh  # ServiceMonitor + PrometheusRules (Step 6)
+  apply-keda.sh        # KEDA ScaledObject (Step 7)
   deploy-k8s.sh        # Patch + kubectl apply
   fix-gpu-scheduling.sh # Clear stale GPU NodeClaims/nodes, re-apply vLLM
   delete-k8s.sh        # Remove K8s workloads
@@ -56,6 +57,7 @@ Run all `make` commands from the **repository root** (`eks-vllm/`), not from `te
 | `make deploy-k8s TF_ENVIRONMENT=prod` | Apply Kubernetes manifests |
 | `make fix-gpu TF_ENVIRONMENT=dev` | Clear stale GPU NodeClaims/nodes, re-apply vLLM |
 | `make install-prometheus TF_ENVIRONMENT=dev` | Step 6: slim Prometheus + vLLM metrics (after vLLM is Running) |
+| `make install-keda TF_ENVIRONMENT=dev` | Step 7: KEDA + ScaledObject (requires Step 6; also installs Prometheus) |
 | `AUTO_APPROVE=1 make delete-k8s TF_ENVIRONMENT=prod` | Remove K8s workloads (keeps cluster) |
 | `AUTO_APPROVE=1 make destroy TF_ENVIRONMENT=prod` | Delete everything for an environment |
 
@@ -92,11 +94,12 @@ Create GitHub **Environments** named `dev` and `prod` (Settings → Environments
 |---|---|---|
 | `INSTANCE_TYPE` | `g5.4xlarge` | GPU instance type for Karpenter node pools |
 | `MODEL_NAME` | `Qwen/Qwen3-8B` | HuggingFace model ID (weights + vLLM serve path) |
-| `DEV_ENABLE_PROMETHEUS` | *(unset)* | Set to `1` on **dev** environment to enable Step 6 (slim Prometheus + ServiceMonitor) |
+| `DEV_ENABLE_PROMETHEUS` | *(unset)* | Set to `1` on **dev** to enable Step 6 (slim Prometheus + ServiceMonitor) |
+| `DEV_ENABLE_KEDA` | *(unset)* | Set to `1` on **dev** to enable Step 7 (KEDA + ScaledObject; also enables Prometheus) |
 
 Dev uses 1 Karpenter replica (single system node); prod uses 2.
 
-Set repo-wide or **per-environment** variables under **Settings → Secrets and variables → Actions → Variables** (prefer **dev** / **prod** environments for `INSTANCE_TYPE`, `MODEL_NAME`, and `DEV_ENABLE_PROMETHEUS`).
+Set repo-wide or **per-environment** variables under **Settings → Secrets and variables → Actions → Variables** (prefer **dev** / **prod** environments for `INSTANCE_TYPE`, `MODEL_NAME`, `DEV_ENABLE_PROMETHEUS`, and `DEV_ENABLE_KEDA`).
 
 ### Per-environment secrets (dev / prod environments)
 
@@ -115,10 +118,10 @@ The IAM user needs permissions for Terraform (VPC, EKS, EFS, ECR, IAM, etc.), EC
 
 1. `terraform apply` in `terraform/environments/<env>` (AWS + IAM only)
 2. Install Karpenter via Helm (`install-controllers.sh`; ALB Controller on prod only)
-3. Install Helm add-ons: **dev** — EFS CSI only (optional slim Prometheus when `DEV_ENABLE_PROMETHEUS=1`); **prod** — EFS CSI, External Secrets, KEDA, Prometheus
+3. Install Helm add-ons: **dev** — EFS CSI only (optional Prometheus/KEDA when `DEV_ENABLE_*=1`); **prod** — full stack
 4. Sync `HF_TOKEN` → AWS Secrets Manager (prod only)
 5. Build and push vLLM image to ECR
-6. Patch and apply Kubernetes manifests (monitoring on dev when `DEV_ENABLE_PROMETHEUS=1`)
+6. Patch and apply Kubernetes manifests (monitoring when `DEV_ENABLE_PROMETHEUS=1` or KEDA enabled; ScaledObject when `DEV_ENABLE_KEDA=1`)
 
 Pull requests targeting `dev` or `main` that touch `terraform/**` run `terraform plan` for the matching environment.
 
@@ -156,7 +159,27 @@ kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:909
 # PromQL: vllm:gpu_cache_usage_perc{namespace="vllm"}
 ```
 
-To disable again, unset `DEV_ENABLE_PROMETHEUS` and run `make delete-addons TF_ENVIRONMENT=dev` (removes Prometheus Helm release).
+To disable again, unset `DEV_ENABLE_PROMETHEUS` and run `AUTO_APPROVE=1 make delete-addons TF_ENVIRONMENT=dev` (removes Prometheus Helm release).
+
+### Dev Step 7 — KEDA (optional)
+
+Enable **after** Step 6 (Prometheus scraping vLLM metrics). `DEV_ENABLE_KEDA=1` also turns on Prometheus on dev.
+
+**GitHub:** set `DEV_ENABLE_KEDA=1` on the **dev** environment (or repository), then push or re-run Deploy.
+
+**Local:**
+
+```bash
+make install-keda TF_ENVIRONMENT=dev
+```
+
+Verify:
+
+```bash
+kubectl get pods -n keda
+kubectl get scaledobject -n vllm
+kubectl describe scaledobject vllm-qwen -n vllm
+```
 
 ### Local teardown
 

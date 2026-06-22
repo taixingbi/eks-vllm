@@ -39,7 +39,9 @@ kubectl apply -f "${OUT_DIR}/karpenter/ec2nodeclass-g5.yaml"
 kubectl apply -f "${OUT_DIR}/karpenter/nodepool-g5-ondemand.yaml"
 if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
   kubectl -n vllm scale deployment vllm-qwen --replicas=1 2>/dev/null || true
-  kubectl delete scaledobject vllm-qwen -n vllm --ignore-not-found 2>/dev/null || true
+  if [[ "${ENABLE_KEDA}" != "1" ]]; then
+    kubectl delete scaledobject vllm-qwen -n vllm --ignore-not-found 2>/dev/null || true
+  fi
 fi
 if [[ "${TF_ENVIRONMENT}" != "dev" ]]; then
   kubectl apply -f "${OUT_DIR}/karpenter/nodepool-g5-spot.yaml"
@@ -70,15 +72,20 @@ if [[ "${TF_ENVIRONMENT}" != "dev" ]]; then
   else
     echo "Skipping ingress (set ACM_CERTIFICATE_ARN to enable HTTPS ingress)"
   fi
+fi
 
+if [[ "${ENABLE_KEDA}" == "1" ]]; then
   kubectl apply -f "${OUT_DIR}/vllm/keda-scaledobject.yaml"
+elif [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
+  echo "Skipping KEDA on dev (minimal path)"
+  echo "Enable Step 7: DEV_ENABLE_KEDA=1 make apply-keda TF_ENVIRONMENT=dev"
 fi
 
 if [[ "${ENABLE_PROMETHEUS}" == "1" ]]; then
   kubectl apply -f "${OUT_DIR}/monitoring/"
 elif [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
-  echo "Skipping ingress, KEDA, and monitoring on dev (minimal path; use port-forward)"
-  echo "Enable Step 6: DEV_ENABLE_PROMETHEUS=1 make deploy-k8s TF_ENVIRONMENT=dev"
+  echo "Skipping monitoring on dev (minimal path)"
+  echo "Enable Step 6: DEV_ENABLE_PROMETHEUS=1 make apply-monitoring TF_ENVIRONMENT=dev"
 fi
 
 echo "Kubernetes deployment complete (${TF_ENVIRONMENT})."

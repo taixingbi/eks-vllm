@@ -31,10 +31,19 @@ install_prometheus() {
   fi
 
   echo "Installing kube-prometheus-stack (slim=${slim})..."
-  # OCI avoids GitHub release asset 500s from prometheus-community Helm repo.
   helm_upgrade_install kube-prometheus-stack \
     oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack \
     "${prom_args[@]}"
+}
+
+install_keda() {
+  helm repo add kedacore https://kedacore.github.io/charts 2>/dev/null || true
+  helm repo update
+  echo "Installing KEDA..."
+  helm_upgrade_install keda kedacore/keda \
+    --namespace keda --create-namespace \
+    --version "${KEDA_CHART_VERSION}" \
+    --wait --timeout 10m
 }
 
 cd "$TF_DIR"
@@ -52,10 +61,16 @@ helm_upgrade_install aws-efs-csi-driver aws-efs-csi-driver/aws-efs-csi-driver \
 if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
   if [[ "${ENABLE_PROMETHEUS}" == "1" ]]; then
     install_prometheus true
-    echo "Cluster add-ons installed (${TF_ENVIRONMENT}, Prometheus enabled)."
+  fi
+  if [[ "${ENABLE_KEDA}" == "1" ]]; then
+    install_keda
+  fi
+  if [[ "${ENABLE_PROMETHEUS}" == "1" ]] || [[ "${ENABLE_KEDA}" == "1" ]]; then
+    echo "Cluster add-ons installed (${TF_ENVIRONMENT}, Prometheus=${ENABLE_PROMETHEUS}, KEDA=${ENABLE_KEDA})."
   else
     echo "Skipping External Secrets, KEDA, and Prometheus on dev (minimal path)"
     echo "Enable Step 6: DEV_ENABLE_PROMETHEUS=1 make install-addons TF_ENVIRONMENT=dev"
+    echo "Enable Step 7: DEV_ENABLE_KEDA=1 make install-addons TF_ENVIRONMENT=dev (also enables Prometheus)"
   fi
   exit 0
 fi
@@ -63,7 +78,6 @@ fi
 EXTERNAL_SECRETS_ROLE_ARN=$(terraform output -raw external_secrets_role_arn)
 
 helm repo add external-secrets https://charts.external-secrets.io 2>/dev/null || true
-helm repo add kedacore https://kedacore.github.io/charts 2>/dev/null || true
 helm repo update
 
 helm_upgrade_install external-secrets external-secrets/external-secrets \
@@ -72,11 +86,7 @@ helm_upgrade_install external-secrets external-secrets/external-secrets \
   --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"="${EXTERNAL_SECRETS_ROLE_ARN}" \
   --wait --timeout 10m
 
-helm_upgrade_install keda kedacore/keda \
-  --namespace keda --create-namespace \
-  --version "${KEDA_CHART_VERSION}" \
-  --wait --timeout 10m
-
+install_keda
 install_prometheus false
 
 echo "Cluster add-ons installed (${TF_ENVIRONMENT})."

@@ -20,6 +20,9 @@ Prometheus
 
 Step 7
 KEDA
+  DEV_ENABLE_KEDA=1 → make install-keda TF_ENVIRONMENT=dev
+  or GitHub dev var DEV_ENABLE_KEDA=1 + Deploy
+  requires: Step 6 Prometheus (auto-enabled when KEDA is on)
 
 Step 8
 ALB
@@ -59,12 +62,12 @@ GitHub Action 自动验证
 ❌ 整条 CI 尚未稳定绿 — 到过 smoke test 但失败；fix 后是否再跑过不确定
 6
 Prometheus
-❌ dev 故意跳过（install-addons.sh）
-❌ 未做（符合 dev 最小路径）
+✅ DEV_ENABLE_PROMETHEUS=1（可选）
+⚠️ 需验证 PromQL vllm:* 有数据
 7
 KEDA
-❌ dev 故意跳过（deploy-k8s.sh）
-❌ 未做
+✅ DEV_ENABLE_KEDA=1（可选，自动开 Prometheus）
+⚠️ 需验证 ScaledObject Ready
 8
 ALB
 ❌ dev 故意跳过（install-controllers.sh）
