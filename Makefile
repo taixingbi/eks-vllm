@@ -1,4 +1,4 @@
-.PHONY: bootstrap init plan apply patch install-controllers install-addons sync-hf-secret build-image deploy-k8s delete-k8s delete-addons destroy fix-gpu
+.PHONY: bootstrap init plan apply patch install-controllers install-addons install-prometheus sync-hf-secret build-image deploy-k8s delete-k8s delete-addons destroy fix-gpu
 
 TF_ENVIRONMENT ?= prod
 TF_DIR = terraform/environments/$(TF_ENVIRONMENT)
@@ -23,6 +23,11 @@ install-controllers:
 
 install-addons:
 	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/install-addons.sh
+
+# Step 6 on dev: slim Prometheus Helm release + vLLM ServiceMonitor (vLLM should be Running).
+install-prometheus:
+	DEV_ENABLE_PROMETHEUS=1 TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/install-addons.sh
+	DEV_ENABLE_PROMETHEUS=1 TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/apply-monitoring.sh
 
 sync-hf-secret:
 	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/sync-hf-secret.sh

@@ -34,3 +34,10 @@ export MODEL_BASENAME="${MODEL_NAME##*/}"
 export MODEL_PATH="/models/${MODEL_BASENAME}"
 export INSTANCE_FAMILY="${INSTANCE_TYPE%%.*}"
 export INSTANCE_SIZE="${INSTANCE_TYPE#*.}"
+
+# Prod always installs Prometheus; dev enables Step 6 with DEV_ENABLE_PROMETHEUS=1.
+if [[ "${TF_ENVIRONMENT}" == "prod" ]] || [[ "${DEV_ENABLE_PROMETHEUS:-}" == "1" ]]; then
+  export ENABLE_PROMETHEUS=1
+else
+  export ENABLE_PROMETHEUS=0
+fi

@@ -72,9 +72,13 @@ if [[ "${TF_ENVIRONMENT}" != "dev" ]]; then
   fi
 
   kubectl apply -f "${OUT_DIR}/vllm/keda-scaledobject.yaml"
+fi
+
+if [[ "${ENABLE_PROMETHEUS}" == "1" ]]; then
   kubectl apply -f "${OUT_DIR}/monitoring/"
-else
+elif [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
   echo "Skipping ingress, KEDA, and monitoring on dev (minimal path; use port-forward)"
+  echo "Enable Step 6: DEV_ENABLE_PROMETHEUS=1 make deploy-k8s TF_ENVIRONMENT=dev"
 fi
 
 echo "Kubernetes deployment complete (${TF_ENVIRONMENT})."

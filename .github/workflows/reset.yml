@@ -41,6 +41,7 @@ jobs:
       TF_ENVIRONMENT: ${{ inputs.environment }}
       INSTANCE_TYPE: ${{ vars.INSTANCE_TYPE }}
       MODEL_NAME: ${{ vars.MODEL_NAME }}
+      DEV_ENABLE_PROMETHEUS: ${{ vars.DEV_ENABLE_PROMETHEUS }}
       AUTO_APPROVE: "1"
 
     steps:

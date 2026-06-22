@@ -36,7 +36,8 @@ docker/
 scripts/
   patch-manifests.sh   # Inject Terraform outputs into manifests
   install-controllers.sh # ALB Controller + Karpenter (Helm, post-Terraform)
-  install-addons.sh    # Helm add-ons (EFS CSI, External Secrets, KEDA, Prometheus)
+  install-addons.sh    # Helm add-ons (EFS CSI; optional Prometheus on dev)
+  apply-monitoring.sh  # ServiceMonitor + PrometheusRules (Step 6)
   deploy-k8s.sh        # Patch + kubectl apply
   fix-gpu-scheduling.sh # Clear stale GPU NodeClaims/nodes, re-apply vLLM
   delete-k8s.sh        # Remove K8s workloads
@@ -53,9 +54,10 @@ Run all `make` commands from the **repository root** (`eks-vllm/`), not from `te
 |---|---|
 | `make apply TF_ENVIRONMENT=prod` | Deploy AWS infrastructure |
 | `make deploy-k8s TF_ENVIRONMENT=prod` | Apply Kubernetes manifests |
-| `make fix-gpu TF_ENVIRONMENT=prod` | Clear stale GPU NodeClaims/nodes, re-apply vLLM |
-| `make delete-k8s TF_ENVIRONMENT=prod` | Remove K8s workloads (keeps cluster) |
-| `make destroy TF_ENVIRONMENT=prod` | Delete everything for an environment |
+| `make fix-gpu TF_ENVIRONMENT=dev` | Clear stale GPU NodeClaims/nodes, re-apply vLLM |
+| `make install-prometheus TF_ENVIRONMENT=dev` | Step 6: slim Prometheus + vLLM metrics (after vLLM is Running) |
+| `AUTO_APPROVE=1 make delete-k8s TF_ENVIRONMENT=prod` | Remove K8s workloads (keeps cluster) |
+| `AUTO_APPROVE=1 make destroy TF_ENVIRONMENT=prod` | Delete everything for an environment |
 
 Set `TF_ENVIRONMENT=dev` or `TF_ENVIRONMENT=prod` (default: `prod`).
 
@@ -90,10 +92,11 @@ Create GitHub **Environments** named `dev` and `prod` (Settings → Environments
 |---|---|---|
 | `INSTANCE_TYPE` | `g5.4xlarge` | GPU instance type for Karpenter node pools |
 | `MODEL_NAME` | `Qwen/Qwen3-8B` | HuggingFace model ID (weights + vLLM serve path) |
+| `DEV_ENABLE_PROMETHEUS` | *(unset)* | Set to `1` on **dev** environment to enable Step 6 (slim Prometheus + ServiceMonitor) |
 
 Dev uses 1 Karpenter replica (single system node); prod uses 2.
 
-Set these under **Settings → Secrets and variables → Actions → Variables**.
+Set repo-wide or **per-environment** variables under **Settings → Secrets and variables → Actions → Variables** (prefer **dev** / **prod** environments for `INSTANCE_TYPE`, `MODEL_NAME`, and `DEV_ENABLE_PROMETHEUS`).
 
 ### Per-environment secrets (dev / prod environments)
 
@@ -111,11 +114,11 @@ The IAM user needs permissions for Terraform (VPC, EKS, EFS, ECR, IAM, etc.), EC
 ### What the deploy workflow does
 
 1. `terraform apply` in `terraform/environments/<env>` (AWS + IAM only)
-2. Install ALB Controller and Karpenter via Helm (`install-controllers.sh`)
-3. Install Helm add-ons (EFS CSI, External Secrets, KEDA, Prometheus)
-4. Sync `HF_TOKEN` → AWS Secrets Manager
+2. Install Karpenter via Helm (`install-controllers.sh`; ALB Controller on prod only)
+3. Install Helm add-ons: **dev** — EFS CSI only (optional slim Prometheus when `DEV_ENABLE_PROMETHEUS=1`); **prod** — EFS CSI, External Secrets, KEDA, Prometheus
+4. Sync `HF_TOKEN` → AWS Secrets Manager (prod only)
 5. Build and push vLLM image to ECR
-6. Patch and apply Kubernetes manifests
+6. Patch and apply Kubernetes manifests (monitoring on dev when `DEV_ENABLE_PROMETHEUS=1`)
 
 Pull requests targeting `dev` or `main` that touch `terraform/**` run `terraform plan` for the matching environment.
 
@@ -127,9 +130,33 @@ Pull requests targeting `dev` or `main` that touch `terraform/**` run `terraform
 |---|---|---|
 | `fix-gpu` | `make fix-gpu` | Delete stale NodeClaims + GPU nodes, re-apply vLLM (keeps PVC/model cache) |
 | `redeploy-k8s` | `make deploy-k8s` | Patch manifests from Terraform outputs and `kubectl apply` |
-| `reset-k8s` | `make delete-k8s` then `make deploy-k8s` | Remove vLLM/Karpenter workloads, then redeploy |
+| `reset-k8s` | `AUTO_APPROVE=1 make delete-k8s` then `make deploy-k8s` | Remove vLLM/Karpenter workloads, then redeploy |
 
 Uses the same concurrency group as **Deploy** (only one run per environment at a time). Prefer **`fix-gpu` on dev** first; use **`reset-k8s`** only when workloads are badly corrupted (deletes the model PVC). Add required reviewers on the **prod** GitHub Environment before allowing `reset-k8s` there.
+
+### Dev Step 6 — Prometheus (optional)
+
+Enable **after** vLLM curl / CI smoke test pass (Steps 4–5). Default dev deploy skips Prometheus to keep the system node light.
+
+**GitHub:** set environment variable `DEV_ENABLE_PROMETHEUS=1` on the **dev** environment, then push or re-run Deploy.
+
+**Local:**
+
+```bash
+make install-prometheus TF_ENVIRONMENT=dev
+```
+
+This installs a **slim** `kube-prometheus-stack` (no Grafana/Alertmanager/node-exporter) and applies ServiceMonitor + alert rules for vLLM.
+
+Verify:
+
+```bash
+kubectl get pods -n monitoring
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:9090
+# PromQL: vllm:gpu_cache_usage_perc{namespace="vllm"}
+```
+
+To disable again, unset `DEV_ENABLE_PROMETHEUS` and run `make delete-addons TF_ENVIRONMENT=dev` (removes Prometheus Helm release).
 
 ### Local teardown
 
@@ -141,27 +168,27 @@ Run from the repository root:
 |---|---|---|
 | Light | `make fix-gpu TF_ENVIRONMENT=dev` | Pod Pending/Evicted, `karpenter.sh/disrupted`, NodeClaim quota stuck |
 | Medium | `make deploy-k8s TF_ENVIRONMENT=dev` | Re-apply manifests after config changes (also clears stale NodeClaims) |
-| Heavy | `make delete-k8s TF_ENVIRONMENT=dev && make deploy-k8s TF_ENVIRONMENT=dev` | vLLM namespace corrupted; deletes PVC (model may re-download) |
+| Heavy | `AUTO_APPROVE=1 make delete-k8s TF_ENVIRONMENT=dev && make deploy-k8s TF_ENVIRONMENT=dev` | vLLM namespace corrupted; deletes PVC (model may re-download) |
 
 Remove workloads only (keeps EKS cluster and Terraform infrastructure):
 
 ```bash
-make delete-k8s TF_ENVIRONMENT=dev    # or prod
+AUTO_APPROVE=1 make delete-k8s TF_ENVIRONMENT=dev    # or prod
 ```
 
 Uninstall Helm add-ons (EFS CSI, External Secrets, KEDA, Prometheus):
 
 ```bash
-make delete-addons TF_ENVIRONMENT=dev
+AUTO_APPROVE=1 make delete-addons TF_ENVIRONMENT=dev
 ```
 
 Destroy everything for an environment (Kubernetes → Helm → `terraform destroy`):
 
 ```bash
-make destroy TF_ENVIRONMENT=dev
+AUTO_APPROVE=1 make destroy TF_ENVIRONMENT=dev
 ```
 
-Each command prompts for confirmation by typing the environment name (`dev` or `prod`). Skip prompts with `AUTO_APPROVE=1`.
+Each command prompts for confirmation by typing the environment name (`dev` or `prod`) unless `AUTO_APPROVE=1` is set.
 
 If an environment was **never deployed**, delete/destroy exits cleanly after reporting `Cluster: qwen-vllm-dev (not deployed)` — no error.
 

@@ -10,6 +10,33 @@ KEDA_CHART_VERSION="${KEDA_CHART_VERSION:-2.16.1}"
 KUBE_PROMETHEUS_STACK_CHART_VERSION="${KUBE_PROMETHEUS_STACK_CHART_VERSION:-86.2.3}"
 AWS_EFS_CSI_CHART_VERSION="${AWS_EFS_CSI_CHART_VERSION:-3.1.7}"
 
+install_prometheus() {
+  local slim="${1:-false}"
+  local prom_args=(
+    --namespace monitoring --create-namespace
+    --version "${KUBE_PROMETHEUS_STACK_CHART_VERSION}"
+    --wait --timeout 15m
+  )
+  if [[ "${slim}" == "true" ]]; then
+    prom_args+=(
+      --set alertmanager.enabled=false
+      --set grafana.enabled=false
+      --set kubeStateMetrics.enabled=false
+      --set nodeExporter.enabled=false
+      --set prometheus.prometheusSpec.resources.requests.cpu=100m
+      --set prometheus.prometheusSpec.resources.requests.memory=256Mi
+      --set prometheus.prometheusSpec.resources.limits.cpu=500m
+      --set prometheus.prometheusSpec.resources.limits.memory=512Mi
+    )
+  fi
+
+  echo "Installing kube-prometheus-stack (slim=${slim})..."
+  # OCI avoids GitHub release asset 500s from prometheus-community Helm repo.
+  helm_upgrade_install kube-prometheus-stack \
+    oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack \
+    "${prom_args[@]}"
+}
+
 cd "$TF_DIR"
 EFS_CSI_ROLE_ARN=$(terraform output -raw efs_csi_role_arn)
 
@@ -23,8 +50,13 @@ helm_upgrade_install aws-efs-csi-driver aws-efs-csi-driver/aws-efs-csi-driver \
   --wait --timeout 10m
 
 if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
-  echo "Skipping External Secrets, KEDA, and Prometheus on dev (minimal path)"
-  echo "Cluster add-ons installed (${TF_ENVIRONMENT})."
+  if [[ "${ENABLE_PROMETHEUS}" == "1" ]]; then
+    install_prometheus true
+    echo "Cluster add-ons installed (${TF_ENVIRONMENT}, Prometheus enabled)."
+  else
+    echo "Skipping External Secrets, KEDA, and Prometheus on dev (minimal path)"
+    echo "Enable Step 6: DEV_ENABLE_PROMETHEUS=1 make install-addons TF_ENVIRONMENT=dev"
+  fi
   exit 0
 fi
 
@@ -45,15 +77,6 @@ helm_upgrade_install keda kedacore/keda \
   --version "${KEDA_CHART_VERSION}" \
   --wait --timeout 10m
 
-PROM_HELM_ARGS=(
-  --namespace monitoring --create-namespace
-  --version "${KUBE_PROMETHEUS_STACK_CHART_VERSION}"
-  --wait --timeout 15m
-)
-
-# OCI avoids GitHub release asset 500s from prometheus-community Helm repo.
-helm_upgrade_install kube-prometheus-stack \
-  oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack \
-  "${PROM_HELM_ARGS[@]}"
+install_prometheus false
 
 echo "Cluster add-ons installed (${TF_ENVIRONMENT})."
