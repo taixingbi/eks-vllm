@@ -63,7 +63,7 @@ if [[ "${ENABLE_ALB}" == "1" ]]; then
     --wait --timeout 10m
 else
   echo "Skipping ALB Controller on dev (minimal path; use port-forward)"
-  echo "Enable Step 8: DEV_ENABLE_ALB=1 make install-alb TF_ENVIRONMENT=dev"
+  echo "Enable Step 8: DEV_ENABLE_ALB=1 make install-alb TF_ENVIRONMENT=dev (add DEV_ALB_HTTP_ONLY=1 for HTTP)"
 fi
 
 echo "Installing Karpenter (${KARPENTER_REPLICAS} replica(s))..."

@@ -44,6 +44,7 @@ jobs:
       DEV_ENABLE_PROMETHEUS: ${{ vars.DEV_ENABLE_PROMETHEUS }}
       DEV_ENABLE_KEDA: ${{ vars.DEV_ENABLE_KEDA }}
       DEV_ENABLE_ALB: ${{ vars.DEV_ENABLE_ALB }}
+      DEV_ALB_HTTP_ONLY: ${{ vars.DEV_ALB_HTTP_ONLY }}
       AUTO_APPROVE: "1"
 
     steps:

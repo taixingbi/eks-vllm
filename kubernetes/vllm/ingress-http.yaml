@@ -1,0 +1,30 @@
+# HTTP-only ALB Ingress for dev (no ACM cert or custom hostname required).
+# Access via ALB DNS: kubectl get ingress vllm-qwen -n vllm -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vllm-qwen
+  namespace: vllm
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "15"
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "5"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
+    alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=300
+    alb.ingress.kubernetes.io/tags: Project=qwen-vllm,Component=vllm-ingress
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: vllm-qwen
+                port:
+                  number: 8000

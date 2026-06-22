@@ -35,10 +35,14 @@ install-keda:
 	DEV_ENABLE_KEDA=1 TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/apply-monitoring.sh
 	DEV_ENABLE_KEDA=1 TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/apply-keda.sh
 
-# Step 8 on dev: ALB Controller + HTTPS Ingress (requires ACM_CERTIFICATE_ARN + INFERENCE_HOSTNAME).
+# Step 8 on dev: ALB Controller + Ingress (HTTP: DEV_ALB_HTTP_ONLY=1; HTTPS: ACM secrets).
 install-alb:
 	DEV_ENABLE_ALB=1 TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/install-alb-controller.sh
-	DEV_ENABLE_ALB=1 TF_ENVIRONMENT=$(TF_ENVIRONMENT) ACM_CERTIFICATE_ARN="$(ACM_CERTIFICATE_ARN)" INFERENCE_HOSTNAME="$(INFERENCE_HOSTNAME)" ./scripts/apply-ingress.sh
+	DEV_ENABLE_ALB=1 TF_ENVIRONMENT=$(TF_ENVIRONMENT) \
+	  DEV_ALB_HTTP_ONLY="$(DEV_ALB_HTTP_ONLY)" \
+	  ACM_CERTIFICATE_ARN="$(ACM_CERTIFICATE_ARN)" \
+	  INFERENCE_HOSTNAME="$(INFERENCE_HOSTNAME)" \
+	  ./scripts/apply-ingress.sh
 
 sync-hf-secret:
 	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/sync-hf-secret.sh

@@ -58,3 +58,10 @@ if [[ "${TF_ENVIRONMENT}" == "prod" ]] || [[ "${DEV_ENABLE_ALB:-}" == "1" ]]; th
 else
   export ENABLE_ALB=0
 fi
+
+# Dev HTTP-only ALB (port 80, no ACM / custom hostname). Ignored on prod.
+if [[ "${TF_ENVIRONMENT}" == "dev" ]] && [[ "${DEV_ALB_HTTP_ONLY:-}" == "1" ]]; then
+  export ALB_HTTP_ONLY=1
+else
+  export ALB_HTTP_ONLY=0
+fi

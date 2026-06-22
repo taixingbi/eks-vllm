@@ -127,6 +127,7 @@ patch_file "${ROOT}/kubernetes/monitoring/cloudwatch-agent.yaml" "${OUT_DIR}/mon
 
 cp "${ROOT}/kubernetes/vllm/namespace.yaml" "${OUT_DIR}/vllm/"
 cp "${ROOT}/kubernetes/vllm/service.yaml" "${OUT_DIR}/vllm/"
+cp "${ROOT}/kubernetes/vllm/ingress-http.yaml" "${OUT_DIR}/vllm/"
 cp "${ROOT}/kubernetes/gpu/nvidia-device-plugin.yaml" "${OUT_DIR}/"
 cp "${ROOT}/kubernetes/monitoring/namespace.yaml" "${OUT_DIR}/monitoring/"
 cp "${ROOT}/kubernetes/monitoring/servicemonitor.yaml" "${OUT_DIR}/monitoring/"

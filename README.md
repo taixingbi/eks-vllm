@@ -60,7 +60,7 @@ Run all `make` commands from the **repository root** (`eks-vllm/`), not from `te
 | `make fix-gpu TF_ENVIRONMENT=dev` | Clear stale GPU NodeClaims/nodes, re-apply vLLM |
 | `make install-prometheus TF_ENVIRONMENT=dev` | Step 6: slim Prometheus + vLLM metrics (after vLLM is Running) |
 | `make install-keda TF_ENVIRONMENT=dev` | Step 7: KEDA + ScaledObject (requires Step 6; also installs Prometheus) |
-| `make install-alb TF_ENVIRONMENT=dev` | Step 8: ALB Controller + HTTPS Ingress (requires ACM cert + hostname) |
+| `make install-alb TF_ENVIRONMENT=dev` | Step 8: ALB Controller + Ingress (HTTP: `DEV_ALB_HTTP_ONLY=1`; HTTPS: ACM cert + hostname) |
 | `AUTO_APPROVE=1 make delete-k8s TF_ENVIRONMENT=prod` | Remove K8s workloads (keeps cluster) |
 | `AUTO_APPROVE=1 make destroy TF_ENVIRONMENT=prod` | Delete everything for an environment |
 
@@ -99,7 +99,8 @@ Create GitHub **Environments** named `dev` and `prod` (Settings → Environments
 | `MODEL_NAME` | `Qwen/Qwen3-8B` | HuggingFace model ID (weights + vLLM serve path) |
 | `DEV_ENABLE_PROMETHEUS` | *(unset)* | Set to `1` on **dev** to enable Step 6 (slim Prometheus + ServiceMonitor) |
 | `DEV_ENABLE_KEDA` | *(unset)* | Set to `1` on **dev** to enable Step 7 (KEDA + ScaledObject; also enables Prometheus) |
-| `DEV_ENABLE_ALB` | *(unset)* | Set to `1` on **dev** to enable Step 8 (ALB Controller + Ingress; needs ACM secret) |
+| `DEV_ENABLE_ALB` | *(unset)* | Set to `1` on **dev** to enable Step 8 (ALB Controller + Ingress) |
+| `DEV_ALB_HTTP_ONLY` | *(unset)* | Set to `1` on **dev** for HTTP-only ALB on port 80 (no ACM / hostname; use ALB DNS) |
 
 Dev uses 1 Karpenter replica (single system node); prod uses 2.
 
@@ -109,8 +110,8 @@ Set repo-wide or **per-environment** variables under **Settings → Secrets and 
 
 | Secret | Purpose |
 |---|---|
-| `ACM_CERTIFICATE_ARN` | ACM cert ARN for HTTPS ingress |
-| `INFERENCE_HOSTNAME` | Public hostname (e.g. `dev.inference.example.com`) |
+| `ACM_CERTIFICATE_ARN` | ACM cert ARN for HTTPS ingress (not needed when `DEV_ALB_HTTP_ONLY=1`) |
+| `INFERENCE_HOSTNAME` | Public hostname for HTTPS (e.g. `dev.inference.example.com`; not needed for HTTP-only) |
 
 HF tokens are stored per environment:
 - **prod:** `qwen-vllm/hf-token`
@@ -187,11 +188,21 @@ kubectl describe scaledobject vllm-qwen -n vllm
 
 ### Dev Step 8 — ALB Ingress (optional)
 
-Enable **after** vLLM is Running (Steps 4–5). Requires **ACM certificate** and **hostname** in the GitHub **dev** environment secrets (`ACM_CERTIFICATE_ARN`, `INFERENCE_HOSTNAME`).
+Enable **after** vLLM is Running (Steps 4–5).
 
-**GitHub:** set `DEV_ENABLE_ALB=1`, then push or re-run Deploy.
+**Option A — HTTP only (dev, no ACM):** set `DEV_ENABLE_ALB=1` and `DEV_ALB_HTTP_ONLY=1`, then push or re-run Deploy.
 
-**Local:**
+**Option B — HTTPS:** set `DEV_ENABLE_ALB=1` plus dev environment secrets `ACM_CERTIFICATE_ARN` and `INFERENCE_HOSTNAME`.
+
+**GitHub:** set the variables above, then push or re-run Deploy.
+
+**Local (HTTP):**
+
+```bash
+DEV_ALB_HTTP_ONLY=1 make install-alb TF_ENVIRONMENT=dev
+```
+
+**Local (HTTPS):**
 
 ```bash
 ACM_CERTIFICATE_ARN=arn:aws:acm:us-east-1:ACCOUNT:certificate/UUID \
@@ -206,6 +217,10 @@ kubectl get ingress vllm-qwen -n vllm
 kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
 
 # After ADDRESS appears (may take 2–5 min):
+# HTTP (use ALB hostname from ingress status):
+curl http://$(kubectl get ingress vllm-qwen -n vllm -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')/v1/models
+
+# HTTPS (custom hostname):
 curl https://dev.inference.example.com/v1/models
 ```
 
@@ -327,7 +342,7 @@ make deploy-k8s TF_ENVIRONMENT=prod
 
 `make build-image` pushes the vLLM image (`:v0.8.4`) and a lightweight model downloader (`:model-downloader`) to ECR. Both are used by the deployment init container; prod also uses the downloader for the model-seed job.
 
-`deploy-k8s` patches manifests from Terraform outputs, applies them in order, and waits for the model-seed job on prod (skipped on dev). Ingress is skipped if `ACM_CERTIFICATE_ARN` is unset.
+`deploy-k8s` patches manifests from Terraform outputs, applies them in order, and waits for the model-seed job on prod (skipped on dev). Ingress is applied when `DEV_ALB_HTTP_ONLY=1` (HTTP) or when `ACM_CERTIFICATE_ARN` is set (HTTPS); otherwise skipped on dev.
 
 Patched manifests are written to `kubernetes/.generated/<env>/`.
 
