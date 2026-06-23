@@ -15,5 +15,3 @@ module "alb_controller_irsa" {
 
   tags = var.tags
 }
-
-data "aws_region" "current" {}

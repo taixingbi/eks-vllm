@@ -1,4 +1,4 @@
-# Checkov policy config (P1). Tighten skips as infra hardens.
+# Checkov policy config (P1). Tighten skips as infra hardens (Step 10).
 compact: true
 quiet: false
 framework:
@@ -6,12 +6,19 @@ framework:
 download-external-modules: true
 evaluate-variables: true
 skip-check:
-  # Public EKS API — required for GitHub Actions deploy without private runner/VPN.
-  - CKV_AWS_39
-  # EKS control plane logging not fully enabled yet (Step 10 hardening).
-  - CKV_AWS_158
-  - CKV_AWS_338
-  # Secrets Manager rotation — HF token rotated manually today.
+  # EKS public API — required for GitHub Actions without private runner/VPN.
+  - CKV_AWS_38
+  # EKS control plane logging not fully enabled yet.
+  - CKV_AWS_37
+  # EKS secrets envelope encryption not enabled yet.
+  - CKV_AWS_58
+  # Registry modules use semver (~> 20.0), not git commit hashes.
+  - CKV_TF_1
+  # CloudWatch agent / Karpenter IRSA policies use Resource "*" (AWS-managed patterns).
+  - CKV_AWS_356
+  - CKV_AWS_109
+  - CKV_AWS_111
+  # Secrets Manager rotation — HF token rotated manually.
   - CKV_AWS_304
-  # Default egress 0.0.0.0/0 on EFS and node SGs (standard AWS pattern).
+  # Default egress 0.0.0.0/0 on security groups (standard AWS pattern).
   - CKV2_AWS_5

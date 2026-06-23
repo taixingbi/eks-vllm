@@ -1,6 +1,3 @@
-data "aws_caller_identity" "current" {}
-data "aws_region" "current" {}
-
 module "vpc" {
   source = "../../modules/vpc"
 
@@ -53,9 +50,7 @@ module "alb_controller" {
   source = "../../modules/alb-controller"
 
   cluster_name      = module.eks.cluster_name
-  vpc_id            = module.vpc.vpc_id
   oidc_provider_arn = module.eks.cluster_oidc_provider_arn
-  oidc_provider     = module.eks.oidc_provider
 
   tags = var.tags
 }
@@ -64,9 +59,7 @@ module "karpenter" {
   source = "../../modules/karpenter"
 
   cluster_name      = module.eks.cluster_name
-  cluster_endpoint  = module.eks.cluster_endpoint
   oidc_provider_arn = module.eks.cluster_oidc_provider_arn
-  oidc_provider     = module.eks.oidc_provider
 
   tags = var.tags
 }
