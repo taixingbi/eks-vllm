@@ -104,7 +104,7 @@ All Helm installs use `--version` from **`scripts/lib/chart-versions.sh`** (sour
 | Phase | Status | Tools |
 |-------|--------|-------|
 | P0 | ✅ | `terraform fmt/validate`, gitleaks |
-| P1 | ✅ | tflint, checkov (`.checkov.yml`) |
+| P1 | ✅ | tflint, checkov (`.checkov.yml`, skips bootstrap) |
 | P2 | ❌ | kubeconform, conftest/OPA |
 | P3 | ❌ | Trivy image scan |
 

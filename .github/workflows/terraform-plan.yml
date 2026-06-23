@@ -64,7 +64,7 @@ jobs:
         working-directory: terraform/environments/${{ needs.resolve-environment.outputs.environment }}
         run: |
           set +e
-          terraform plan -no-color -out=tfplan 2>&1 | tee plan.txt
+          terraform plan -no-color -lock-timeout=15m -out=tfplan 2>&1 | tee plan.txt
           echo "exitcode=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
         continue-on-error: true
 

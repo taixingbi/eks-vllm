@@ -12,6 +12,7 @@ resource "aws_security_group" "efs" {
   }
 
   egress {
+    description = "Allow outbound for EFS mount target health checks"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"

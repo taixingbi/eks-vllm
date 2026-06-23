@@ -86,7 +86,7 @@ jobs:
 
       - name: Terraform Apply
         working-directory: terraform/environments/${{ needs.resolve-environment.outputs.environment }}
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve -lock-timeout=15m
 
       - name: Configure kubectl
         run: |

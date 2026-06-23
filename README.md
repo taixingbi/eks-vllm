@@ -488,6 +488,7 @@ kubectl get pods -n vllm -w
 | Pod Pending, `karpenter.sh/disrupted`, many NodeClaims | Stale GPU node/NodeClaim after evicted rollout | `make fix-gpu TF_ENVIRONMENT=dev` or **Actions → Reset → fix-gpu** |
 | `no such host` on kubectl | Stale kubeconfig after cluster recreate | `make kubeconfig-dev` or `aws eks update-kubeconfig --region us-east-1 --name qwen-vllm-dev` |
 | Wrong cluster / stale kubeconfig | Context points at destroyed env | `make kubeconfig-dev` or `make kubeconfig-prod` from repo root |
+| `Error acquiring the state lock` / `ConditionalCheckFailedException` | Another Deploy or local `terraform apply` holds the DynamoDB lock | Wait for **Actions → Deploy** to finish. If stale: `LOCK_ID=<uuid> TF_ENVIRONMENT=dev make force-unlock-terraform` then re-run Deploy. Do not use `-lock=false`. |
 
 ```bash
 # Port-forward for local test (dev model path)

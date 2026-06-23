@@ -1,4 +1,4 @@
-.PHONY: bootstrap init plan apply patch install-controllers install-addons install-prometheus install-keda install-alb sync-hf-secret build-image deploy-k8s delete-k8s delete-addons destroy fix-gpu lint lint-terraform load-test-slo
+.PHONY: bootstrap init plan apply patch install-controllers install-addons install-prometheus install-keda install-alb sync-hf-secret build-image deploy-k8s delete-k8s delete-addons destroy fix-gpu lint lint-terraform load-test-slo force-unlock-terraform
 
 TF_ENVIRONMENT ?= prod
 TF_DIR = terraform/environments/$(TF_ENVIRONMENT)
@@ -82,3 +82,6 @@ lint-terraform:
 
 load-test-slo:
 	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/load-test-slo.sh
+
+force-unlock-terraform:
+	LOCK_ID="$(LOCK_ID)" TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/force-unlock-terraform.sh

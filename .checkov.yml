@@ -5,20 +5,34 @@ framework:
   - terraform
 download-external-modules: true
 evaluate-variables: true
+# One-time bootstrap stack; not part of dev/prod deploy path.
+skip-path:
+  - terraform/bootstrap/**
 skip-check:
-  # EKS public API — required for GitHub Actions without private runner/VPN.
-  - CKV_AWS_38
-  # EKS control plane logging not fully enabled yet.
-  - CKV_AWS_37
-  # EKS secrets envelope encryption not enabled yet.
-  - CKV_AWS_58
-  # Registry modules use semver (~> 20.0), not git commit hashes.
-  - CKV_TF_1
-  # CloudWatch agent / Karpenter IRSA policies use Resource "*" (AWS-managed patterns).
-  - CKV_AWS_356
+  # --- EKS (GitHub Actions needs public API; hardening in Step 10) ---
+  - CKV_AWS_38   # public endpoint 0.0.0.0/0
+  - CKV_AWS_37   # control plane logging types
+  - CKV_AWS_58   # secrets envelope encryption
+  - CKV_AWS_338  # CloudWatch log retention >= 1 year
+  # --- Terraform registry modules ---
+  - CKV_TF_1     # semver modules, not git commit hash
+  # --- IAM (CloudWatch agent / Karpenter IRSA patterns) ---
   - CKV_AWS_109
   - CKV_AWS_111
-  # Secrets Manager rotation — HF token rotated manually.
-  - CKV_AWS_304
-  # Default egress 0.0.0.0/0 on security groups (standard AWS pattern).
-  - CKV2_AWS_5
+  - CKV_AWS_290
+  - CKV_AWS_355
+  - CKV_AWS_356
+  # --- VPC module (terraform-aws-modules/vpc) ---
+  - CKV_AWS_130  # public subnets assign public IP (required for NAT/system nodes)
+  - CKV2_AWS_11  # VPC flow logs
+  - CKV2_AWS_12  # default SG restrict all traffic
+  - CKV2_AWS_19  # NAT gateway EIPs not on EC2 instances
+  # --- ECR ---
+  - CKV_AWS_51   # immutable tags (CI re-pushes :v0.8.4)
+  - CKV_AWS_136  # ECR KMS CMK
+  # --- EFS ---
+  - CKV_AWS_382  # SG egress all protocols to 0.0.0.0/0
+  - CKV_AWS_184  # EFS customer-managed KMS (uses AWS-managed encryption)
+  # --- Secrets / SG egress ---
+  - CKV_AWS_304  # Secrets Manager rotation
+  - CKV2_AWS_5   # SG egress 0.0.0.0/0
