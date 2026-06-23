@@ -223,7 +223,11 @@ Two layers — do not conflate them:
 | **GPU nodes** | Karpenter | EC2 G5 instances | Pending pods with unsatisfied `nvidia.com/gpu` |
 
 **KEDA ScaledObject** (preferred over CPU-based HPA for LLM):
-- Scale on `vllm:num_requests_running` or `vllm:gpu_cache_usage_perc` if exposing vLLM Prometheus metrics
+**Scale on vLLM Prometheus metrics** (see `kubernetes/vllm/keda-scaledobject.yaml`):
+- Primary: `vllm:queue_depth:sum` (waiting requests)
+- Secondary: `max(vllm:gpu_cache_usage_perc)`
+- Tertiary: `vllm:ttft:p95`
+- Do **not** scale on `num_requests_running` alone — use queue depth instead
 - Fallback: scale on ALB `RequestCountPerTarget` via CloudWatch scaler
 - Example policy: scale out when GPU cache > 80% or queue depth > 5 for 60s; scale in after 10 min idle
 - `minReplicaCount: 2`, `maxReplicaCount: 10`, `cooldownPeriod: 300`

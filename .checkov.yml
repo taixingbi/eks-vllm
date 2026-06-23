@@ -1,0 +1,17 @@
+# Checkov policy config (P1). Tighten skips as infra hardens.
+compact: true
+quiet: false
+framework:
+  - terraform
+download-external-modules: true
+evaluate-variables: true
+skip-check:
+  # Public EKS API — required for GitHub Actions deploy without private runner/VPN.
+  - CKV_AWS_39
+  # EKS control plane logging not fully enabled yet (Step 10 hardening).
+  - CKV_AWS_158
+  - CKV_AWS_338
+  # Secrets Manager rotation — HF token rotated manually today.
+  - CKV_AWS_304
+  # Default egress 0.0.0.0/0 on EFS and node SGs (standard AWS pattern).
+  - CKV2_AWS_5

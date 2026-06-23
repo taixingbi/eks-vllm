@@ -10,6 +10,8 @@ spec:
     - name: vllm-qwen-recording
       interval: 30s
       rules:
+        - record: vllm:queue_depth:sum
+          expr: sum(vllm:num_requests_waiting{namespace="vllm"})
         - record: vllm:ttft:p95
           expr: |
             histogram_quantile(0.95,
@@ -22,6 +24,65 @@ spec:
             )
         - record: vllm:generation_tps:sum
           expr: sum(rate(vllm:generation_tokens_total{namespace="vllm"}[2m]))
+        - record: vllm:error_rate:ratio
+          expr: |
+            (
+              sum(rate(vllm:request_success_total{namespace="vllm", finished_reason!="stop"}[5m]))
+              /
+              clamp_min(sum(rate(vllm:request_success_total{namespace="vllm"}[5m])), 1e-9)
+            )
+        - record: vllm:ready_replicas:ratio
+          expr: |
+            (
+              count(kube_pod_status_ready{namespace="vllm", pod=~"vllm-qwen-.*", condition="true"} == 1)
+              /
+              clamp_min(
+                count(kube_deployment_status_replicas{namespace="vllm", deployment="vllm-qwen"}),
+                1
+              )
+            )
+
+    - name: vllm-qwen-slo
+      rules:
+        - alert: VLLMSLOTTFTBreached
+          expr: vllm:ttft:p95 > 2
+          for: 5m
+          labels:
+            severity: warning
+            slo: ttft_p95
+          annotations:
+            summary: "SLO breach: TTFT p95 > 2s"
+            description: "p95 time-to-first-token is {{ $value }}s (target < 2s)."
+
+        - alert: VLLMSLOLatencyBreached
+          expr: vllm:e2e_latency:p95 > 10
+          for: 5m
+          labels:
+            severity: warning
+            slo: e2e_p95
+          annotations:
+            summary: "SLO breach: end-to-end p95 latency > 10s"
+            description: "p95 end-to-end latency is {{ $value }}s (target < 10s)."
+
+        - alert: VLLMSLOErrorRateBreached
+          expr: vllm:error_rate:ratio > 0.01
+          for: 5m
+          labels:
+            severity: critical
+            slo: error_rate
+          annotations:
+            summary: "SLO breach: error rate > 1%"
+            description: "Non-stop finished_reason ratio is {{ $value | humanizePercentage }} (target < 1%)."
+
+        - alert: VLLMSLOAvailabilityBreached
+          expr: vllm:ready_replicas:ratio < 0.995
+          for: 15m
+          labels:
+            severity: critical
+            slo: availability
+          annotations:
+            summary: "SLO breach: ready replicas < 99.5%"
+            description: "Ready ratio is {{ $value | humanizePercentage }} (target >= 99.5%). Requires kube-state-metrics."
 
     - name: vllm-qwen
       rules:
@@ -45,7 +106,7 @@ spec:
             description: "Max GPU cache usage is {{ $value | humanizePercentage }} — consider scaling replicas."
 
         - alert: VLLMHighRequestQueue
-          expr: sum(vllm:num_requests_waiting{namespace="vllm"}) > 10
+          expr: vllm:queue_depth:sum > 10
           for: 2m
           labels:
             severity: warning
@@ -63,17 +124,17 @@ spec:
             description: "p95 time-to-first-token is {{ $value }}s — check cold start, prompt length, or capacity."
 
         - alert: VLLMHighP95Latency
-          expr: vllm:e2e_latency:p95 > 30
+          expr: vllm:e2e_latency:p95 > 10
           for: 5m
           labels:
             severity: warning
           annotations:
-            summary: "vLLM p95 end-to-end latency exceeds 30s"
-            description: "p95 end-to-end latency is {{ $value }}s."
+            summary: "vLLM p95 end-to-end latency exceeds 10s"
+            description: "p95 end-to-end latency is {{ $value }}s (SLO target < 10s)."
 
         - alert: VLLMThroughputSaturation
           expr: |
-            sum(vllm:num_requests_waiting{namespace="vllm"}) > 0
+            vllm:queue_depth:sum > 0
             and vllm:generation_tps:sum > 20
           for: 2m
           labels:
@@ -84,7 +145,7 @@ spec:
 
         - alert: VLLMThroughputStall
           expr: |
-            sum(vllm:num_requests_waiting{namespace="vllm"}) > 3
+            vllm:queue_depth:sum > 3
             and vllm:generation_tps:sum == 0
           for: 3m
           labels:
@@ -100,4 +161,4 @@ spec:
             severity: info
           annotations:
             summary: "Elevated Spot interruption rate"
-            description: "Multiple Spot interruptions in the last 15 minutes."
+            description: "Multiple Spot interruptions in the last 15 minutes — verify On-Demand baseline and preStop drain."

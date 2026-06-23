@@ -1,0 +1,111 @@
+name: Policy
+
+on:
+  pull_request:
+    branches: [main, dev]
+  push:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+  pull-requests: read
+  security-events: write
+
+concurrency:
+  group: policy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  terraform-fmt-validate:
+    name: Terraform fmt / validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.6
+
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive terraform/
+
+      - name: Terraform validate
+        run: |
+          set -euo pipefail
+          roots=(
+            terraform/bootstrap
+            terraform/modules/alb-controller
+            terraform/modules/ecr
+            terraform/modules/efs
+            terraform/modules/eks
+            terraform/modules/external-secrets
+            terraform/modules/karpenter
+            terraform/modules/vpc
+            terraform/environments/dev
+            terraform/environments/prod
+          )
+          for dir in "${roots[@]}"; do
+            echo "==> ${dir}"
+            terraform -chdir="${dir}" init -backend=false -input=false -upgrade=false
+            terraform -chdir="${dir}" validate -no-color
+          done
+
+  tflint:
+    name: tflint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.6
+
+      - name: Setup tflint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: v0.55.1
+
+      - name: Run tflint
+        working-directory: terraform
+        run: |
+          tflint --init
+          tflint --recursive -f compact
+
+  checkov:
+    name: checkov (terraform)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.6
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: terraform/
+          framework: terraform
+          config_file: .checkov.yml
+          soft_fail: false
+          download_external_modules: true
+
+  secret-scan:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

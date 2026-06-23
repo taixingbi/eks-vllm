@@ -37,4 +37,4 @@ spec:
   disruption:
     consolidationPolicy: __NODEPOOL_CONSOLIDATION_POLICY__
     consolidateAfter: __NODEPOOL_CONSOLIDATE_AFTER__
-  weight: 50
+  weight: 100

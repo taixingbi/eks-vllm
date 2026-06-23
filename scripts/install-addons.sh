@@ -5,10 +5,6 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib/env.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/helm.sh"
 AWS_REGION="${AWS_REGION:-us-east-1}"
-EXTERNAL_SECRETS_CHART_VERSION="${EXTERNAL_SECRETS_CHART_VERSION:-2.6.0}"
-KEDA_CHART_VERSION="${KEDA_CHART_VERSION:-2.16.1}"
-KUBE_PROMETHEUS_STACK_CHART_VERSION="${KUBE_PROMETHEUS_STACK_CHART_VERSION:-86.2.3}"
-AWS_EFS_CSI_CHART_VERSION="${AWS_EFS_CSI_CHART_VERSION:-3.1.7}"
 
 install_prometheus() {
   local slim="${1:-false}"
@@ -66,6 +62,7 @@ if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
     install_keda
   fi
   if [[ "${ENABLE_PROMETHEUS}" == "1" ]] || [[ "${ENABLE_KEDA}" == "1" ]]; then
+    chart_versions_print
     echo "Cluster add-ons installed (${TF_ENVIRONMENT}, Prometheus=${ENABLE_PROMETHEUS}, KEDA=${ENABLE_KEDA})."
   else
     echo "Skipping External Secrets, KEDA, and Prometheus on dev (minimal path)"
@@ -89,4 +86,5 @@ helm_upgrade_install external-secrets external-secrets/external-secrets \
 install_keda
 install_prometheus false
 
+chart_versions_print
 echo "Cluster add-ons installed (${TF_ENVIRONMENT})."

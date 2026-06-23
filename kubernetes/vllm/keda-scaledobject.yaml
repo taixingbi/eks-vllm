@@ -34,9 +34,9 @@ spec:
     - type: prometheus
       metadata:
         serverAddress: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
-        metricName: vllm_waiting_requests
+        metricName: vllm_queue_depth
         threshold: "__KEDA_WAITING_THRESHOLD__"
-        query: sum(vllm:num_requests_waiting{namespace="vllm"})
+        query: vllm:queue_depth:sum
     - type: prometheus
       metadata:
         serverAddress: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090

@@ -65,3 +65,6 @@ if [[ "${TF_ENVIRONMENT}" == "dev" ]] && [[ "${DEV_ALB_HTTP_ONLY:-}" == "1" ]]; 
 else
   export ALB_HTTP_ONLY=0
 fi
+
+# shellcheck source=scripts/lib/chart-versions.sh
+source "$(dirname "${BASH_SOURCE[0]}")/chart-versions.sh"

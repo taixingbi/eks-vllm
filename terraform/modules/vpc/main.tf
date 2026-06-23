@@ -17,20 +17,20 @@ module "vpc" {
   private_subnets = [for i, az in local.azs : cidrsubnet(var.vpc_cidr, 4, i)]
   public_subnets  = [for i, az in local.azs : cidrsubnet(var.vpc_cidr, 4, i + length(local.azs))]
 
-  enable_nat_gateway   = true
-  single_nat_gateway   = var.single_nat_gateway
-  enable_dns_hostnames = true
-  enable_dns_support   = true
+  enable_nat_gateway      = true
+  single_nat_gateway      = var.single_nat_gateway
+  enable_dns_hostnames    = true
+  enable_dns_support      = true
   map_public_ip_on_launch = true
 
   public_subnet_tags = {
-    "kubernetes.io/role/elb"                      = 1
-    "karpenter.sh/discovery"                      = var.cluster_name
+    "kubernetes.io/role/elb" = 1
+    "karpenter.sh/discovery" = var.cluster_name
   }
 
   private_subnet_tags = {
-    "kubernetes.io/role/internal-elb"             = 1
-    "karpenter.sh/discovery"                      = var.cluster_name
+    "kubernetes.io/role/internal-elb" = 1
+    "karpenter.sh/discovery"          = var.cluster_name
   }
 
   tags = var.tags

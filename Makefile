@@ -1,4 +1,4 @@
-.PHONY: bootstrap init plan apply patch install-controllers install-addons install-prometheus install-keda install-alb sync-hf-secret build-image deploy-k8s delete-k8s delete-addons destroy fix-gpu
+.PHONY: bootstrap init plan apply patch install-controllers install-addons install-prometheus install-keda install-alb sync-hf-secret build-image deploy-k8s delete-k8s delete-addons destroy fix-gpu lint lint-terraform load-test-slo
 
 TF_ENVIRONMENT ?= prod
 TF_DIR = terraform/environments/$(TF_ENVIRONMENT)
@@ -73,3 +73,12 @@ kubeconfig-prod:
 
 kubeconfig-dev:
 	$(MAKE) kubeconfig TF_ENVIRONMENT=dev
+
+# P0/P1 policy gates (fmt, validate, tflint, checkov). Requires tflint + checkov locally.
+lint: lint-terraform
+
+lint-terraform:
+	./scripts/lint-terraform.sh
+
+load-test-slo:
+	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/load-test-slo.sh

@@ -37,4 +37,5 @@ spec:
   disruption:
     consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: 5m
+  # Lower weight than g5-ondemand (100) — burst only; Karpenter prefers On-Demand.
   weight: 10

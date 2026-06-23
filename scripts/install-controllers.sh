@@ -6,8 +6,6 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/env.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/cluster.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/helm.sh"
 AWS_REGION="${AWS_REGION:-us-east-1}"
-ALB_CHART_VERSION="${ALB_CHART_VERSION:-1.8.2}"
-KARPENTER_CHART_VERSION="${KARPENTER_CHART_VERSION:-1.0.8}"
 
 if [[ -z "${KARPENTER_REPLICAS:-}" ]]; then
   if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
@@ -88,4 +86,5 @@ helm_upgrade_install karpenter oci://public.ecr.aws/karpenter/karpenter \
   --set controller.resources.limits.memory="${KARPENTER_MEM_REQUEST}" \
   --wait --timeout 10m
 
+chart_versions_print
 echo "Controllers installed (${TF_ENVIRONMENT})."

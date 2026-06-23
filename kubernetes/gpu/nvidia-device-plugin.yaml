@@ -22,7 +22,7 @@ spec:
         workload: gpu
       priorityClassName: system-node-critical
       containers:
-        - image: nvcr.io/nvidia/k8s-device-plugin:v0.14.5
+        - image: nvcr.io/nvidia/k8s-device-plugin:__NVIDIA_DEVICE_PLUGIN_VERSION__
           name: nvidia-device-plugin-ctr
           env:
             - name: FAIL_ON_INIT_ERROR

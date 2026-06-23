@@ -30,7 +30,7 @@
 - Requires Step 6 (Prometheus scraping `vllm:*` metrics)
 - Scale-out triggers (OR): **waiting queue** (primary), **max GPU KV cache**, **TTFT p95** (tertiary)
 - `tokens/sec` → Grafana + alerts only, **not** a KEDA trigger
-- Recording rules: `vllm:ttft:p95`, `vllm:e2e_latency:p95`, `vllm:generation_tps:sum`
+- Recording rules: `vllm:queue_depth:sum`, `vllm:ttft:p95`, `vllm:e2e_latency:p95`, `vllm:generation_tps:sum`
 
 ### Step 8 — ALB
 
@@ -80,6 +80,51 @@ Skipped unless flags set: ALB, KEDA, Prometheus, External Secrets, Ingress.
 | Replicas | 1 |
 | PDB `minAvailable` | 0 |
 | Rollout `maxSurge` | 0 |
+
+---
+
+## Pinned add-on versions
+
+All Helm installs use `--version` from **`scripts/lib/chart-versions.sh`** (sourced by `env.sh`). CI can override via GitHub repository variables.
+
+| Component | Default version |
+|-----------|-----------------|
+| Karpenter | `1.0.8` |
+| ALB Controller | `1.8.2` |
+| AWS EFS CSI | `3.1.7` |
+| kube-prometheus-stack | `86.2.3` |
+| KEDA | `2.16.1` |
+| External Secrets | `2.6.0` |
+| NVIDIA device plugin | `0.14.5` |
+
+---
+
+## Policy gates
+
+| Phase | Status | Tools |
+|-------|--------|-------|
+| P0 | ✅ | `terraform fmt/validate`, gitleaks |
+| P1 | ✅ | tflint, checkov (`.checkov.yml`) |
+| P2 | ❌ | kubeconform, conftest/OPA |
+| P3 | ❌ | Trivy image scan |
+
+CI: `.github/workflows/policy.yml` · Local: `make lint-terraform`
+
+---
+
+## Production HA & SLO (Step 10)
+
+| Item | Status |
+|------|--------|
+| PDB + rolling update (prod) | ✅ |
+| startup / readiness / liveness probes | ✅ |
+| preStop + termination grace | ✅ |
+| Spot interruption (SQS + Karpenter + EFS) | ✅ |
+| On-Demand preferred over Spot (NodePool weight) | ✅ |
+| SLO alerts (`VLLMSLO*`) | ✅ |
+| Load test script | ✅ `scripts/load-test-slo.sh` |
+
+Details: **`docs/production-ha-slo.md`**
 
 ---
 

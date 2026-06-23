@@ -6,7 +6,6 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/env.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/cluster.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/helm.sh"
 AWS_REGION="${AWS_REGION:-us-east-1}"
-ALB_CHART_VERSION="${ALB_CHART_VERSION:-1.8.2}"
 
 if [[ "${ENABLE_ALB}" != "1" ]]; then
   echo "ALB not enabled. Set DEV_ENABLE_ALB=1 for dev or use prod."

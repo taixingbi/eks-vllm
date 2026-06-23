@@ -106,6 +106,20 @@ Dev uses 1 Karpenter replica (single system node); prod uses 2.
 
 Set repo-wide or **per-environment** variables under **Settings → Secrets and variables → Actions** (prefer **dev** / **prod** environments for `INSTANCE_TYPE`, `MODEL_NAME`, `DEV_ENABLE_*`).
 
+Optional **Helm chart overrides** (unset = defaults in `scripts/lib/chart-versions.sh`):
+
+| Variable | Default | Chart |
+|---|---|---|
+| `KARPENTER_CHART_VERSION` | `1.0.8` | Karpenter |
+| `ALB_CHART_VERSION` | `1.8.2` | AWS Load Balancer Controller |
+| `AWS_EFS_CSI_CHART_VERSION` | `3.1.7` | AWS EFS CSI Driver |
+| `KUBE_PROMETHEUS_STACK_CHART_VERSION` | `86.2.3` | kube-prometheus-stack |
+| `KEDA_CHART_VERSION` | `2.16.1` | KEDA |
+| `EXTERNAL_SECRETS_CHART_VERSION` | `2.6.0` | External Secrets Operator |
+| `NVIDIA_DEVICE_PLUGIN_VERSION` | `0.14.5` | NVIDIA device plugin (manifest, not Helm) |
+
+Bump versions in **`scripts/lib/chart-versions.sh`** (single source of truth), then re-run `install-controllers` + `install-addons`.
+
 ### Per-environment secrets (dev / prod environments)
 
 | Secret | Purpose |
@@ -129,6 +143,30 @@ The IAM user needs permissions for Terraform (VPC, EKS, EFS, ECR, IAM, etc.), EC
 6. Patch and apply Kubernetes manifests (monitoring / KEDA / Ingress when respective `DEV_ENABLE_*=1`)
 
 Pull requests targeting `dev` or `main` that touch `terraform/**` run `terraform plan` for the matching environment.
+
+### Policy gates (P0 / P1)
+
+Workflow **`.github/workflows/policy.yml`** runs on every PR and push to `dev` / `main`:
+
+| Job | Tool | What it checks |
+|-----|------|----------------|
+| `terraform-fmt-validate` | Terraform 1.15.6 | `fmt -check` + `validate` (all modules/envs, `-backend=false`) |
+| `tflint` | tflint + AWS ruleset | Lint under `terraform/` (`terraform/.tflint.hcl`) |
+| `checkov` | Checkov | Terraform security (`/.checkov.yml`, documented skips) |
+| `secret-scan` | gitleaks | Leaked secrets in git history |
+
+**Branch protection (recommended):** require all four jobs before merge.
+
+**Local:**
+
+```bash
+# P0 only (Terraform only)
+terraform fmt -check -recursive terraform/
+# full P0+P1 (install tflint + checkov first, e.g. brew install tflint && pipx install checkov)
+make lint-terraform
+```
+
+P2+ (kubeconform, conftest, image scan) not included yet.
 
 ### Reset (manual recovery)
 
@@ -191,11 +229,19 @@ KEDA scale-out triggers (any fires → scale up):
 
 | Signal | PromQL | Dev threshold | Prod threshold |
 |--------|--------|---------------|----------------|
-| Waiting queue (primary) | `sum(vllm:num_requests_waiting{namespace="vllm"})` | > 2 | > 3 |
+| Waiting queue / queue depth (primary) | `vllm:queue_depth:sum` | > 2 | > 3 |
 | GPU KV cache pressure | `max(vllm:gpu_cache_usage_perc{namespace="vllm"})` | > 0.80 | > 0.80 |
 | TTFT p95 (tertiary) | `vllm:ttft:p95` | > 2s | > 2s |
 
 `tokens/sec` is used in Grafana and saturation alerts only — not as a KEDA trigger. Tune thresholds in `scripts/patch-manifests.sh` after load testing.
+
+If the cluster still shows old triggers (`num_requests_running`), re-apply:
+
+```bash
+make install-keda TF_ENVIRONMENT=dev
+kubectl get scaledobject vllm-qwen -n vllm -o yaml | grep -A2 'query:'
+# expect: vllm:queue_depth:sum, max(gpu_cache...), vllm:ttft:p95
+```
 
 ### Dev Step 8 — ALB Ingress (optional)
 
@@ -360,12 +406,15 @@ Patched manifests are written to `kubernetes/.generated/<env>/`.
 <details>
 <summary>Manual add-on and manifest steps (if not using scripts)</summary>
 
+Use the same pinned versions as `scripts/lib/chart-versions.sh` (defaults shown below).
+
 **EFS CSI driver** (uses IRSA role from Terraform):
 
 ```bash
 helm repo add aws-efs-csi-driver https://kubernetes-sigs.github.io/aws-efs-csi-driver/
-helm install aws-efs-csi-driver aws-efs-csi-driver/aws-efs-csi-driver \
+helm upgrade --install aws-efs-csi-driver aws-efs-csi-driver/aws-efs-csi-driver \
   --namespace kube-system \
+  --version 3.1.7 \
   --set controller.serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$(terraform output -raw efs_csi_role_arn)
 ```
 
@@ -373,8 +422,9 @@ helm install aws-efs-csi-driver aws-efs-csi-driver/aws-efs-csi-driver \
 
 ```bash
 helm repo add external-secrets https://charts.external-secrets.io
-helm install external-secrets external-secrets/external-secrets \
-  --namespace external-secrets --create-namespace
+helm upgrade --install external-secrets external-secrets/external-secrets \
+  --namespace external-secrets --create-namespace \
+  --version 2.6.0
 ```
 
 Store HF token in Secrets Manager (`qwen-vllm/hf-token` for prod, `qwen-vllm-dev/hf-token` for dev), then apply:
@@ -388,16 +438,21 @@ kubectl apply -f kubernetes/vllm/external-secret-hf.yaml
 
 ```bash
 helm repo add kedacore https://kedacore.github.io/charts
-helm install keda kedacore/keda --namespace keda --create-namespace
+helm upgrade --install keda kedacore/keda \
+  --namespace keda --create-namespace \
+  --version 2.16.1
 ```
 
 **Prometheus** (for metrics + KEDA triggers):
 
 ```bash
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
-  --namespace monitoring --create-namespace
+helm upgrade --install kube-prometheus-stack \
+  oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack \
+  --namespace monitoring --create-namespace \
+  --version 86.2.3
 ```
+
+**Karpenter / ALB Controller** — see `scripts/install-controllers.sh` (Karpenter `1.0.8`, ALB `1.8.2`).
 
 Patch and apply manifests manually:
 
@@ -459,7 +514,25 @@ curl http://localhost:8000/v1/chat/completions \
 
 ### 7. Production HA baseline
 
-Ensure 2 On-Demand replicas across AZs (default in deployment). Update PDB to `minAvailable: 2` when running 3+ replicas.
+Prod defaults (see **`docs/production-ha-slo.md`**):
+
+| Control | Prod value |
+|---------|------------|
+| PDB | `minAvailable: 1` (use `2` when running 3+ replicas) |
+| Rolling update | `maxSurge: 1`, `maxUnavailable: 0` |
+| Probes | `startupProbe` + `readinessProbe` + `livenessProbe` on `/health` |
+| Graceful shutdown | `preStop` sleep 30s + `terminationGracePeriodSeconds: 120` |
+| Spot | On-Demand weight 100, Spot weight 10; Karpenter interruption queue + EFS cache |
+
+**SLO targets:** TTFT p95 < 2s · e2e p95 < 10s · error rate < 1% · availability ≥ 99.5%  
+Prometheus alerts: `VLLMSLO*` in `kubernetes/monitoring/prometheus-rules.yaml`
+
+**Load test:**
+
+```bash
+kubectl port-forward -n vllm svc/vllm-qwen 8000:8000 &
+make load-test-slo TF_ENVIRONMENT=prod
+```
 
 ## vLLM Configuration
 
@@ -492,8 +565,8 @@ Optional ALB fallback scaler: `kubernetes/vllm/keda-scaledobject-alb-fallback.ya
 
 ## Key Risks
 
-- **Spot interruption:** min 2 On-Demand replicas + 120s termination grace period
-- **Cold start:** EFS model cache + model-seed Job; pod startup probe allows 5 min
+- **Spot interruption:** min 2 On-Demand replicas + preStop drain + 120s termination grace; Spot burst only
+- **Cold start:** EFS model cache + startupProbe; readiness on `/health` after model load
 - **GPU quota:** request `g5.4xlarge` increase before deploy
 - **ALB timeout:** 300s idle timeout configured; match client timeouts
 

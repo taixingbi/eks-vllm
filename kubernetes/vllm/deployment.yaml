@@ -25,7 +25,7 @@ spec:
         prometheus.io/path: "/metrics"
     spec:
       serviceAccountName: vllm
-      terminationGracePeriodSeconds: 120
+      terminationGracePeriodSeconds: __TERMINATION_GRACE_SECONDS__
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: topology.kubernetes.io/zone
@@ -155,6 +155,13 @@ spec:
             periodSeconds: 30
             failureThreshold: 3
             timeoutSeconds: 5
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - sleep __PRESTOP_SLEEP_SECONDS__
           volumeMounts:
             - name: model-cache
               mountPath: /models

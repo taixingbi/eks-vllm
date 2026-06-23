@@ -44,6 +44,8 @@ if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
   VLLM_MAX_MODEL_LEN=2048
   VLLM_GPU_MEMORY_UTIL=0.75
   VLLM_STARTUP_FAILURE_THRESHOLD=90
+  PRESTOP_SLEEP_SECONDS=15
+  TERMINATION_GRACE_SECONDS=120
 else
   VLLM_REPLICAS=2
   KEDA_MIN_REPLICAS=2
@@ -67,6 +69,8 @@ else
   VLLM_MAX_MODEL_LEN=8192
   VLLM_GPU_MEMORY_UTIL=0.90
   VLLM_STARTUP_FAILURE_THRESHOLD=30
+  PRESTOP_SLEEP_SECONDS=30
+  TERMINATION_GRACE_SECONDS=120
 fi
 
 # NodePool instance-size follows INSTANCE_TYPE (g5.2xlarge -> "2xlarge", g5.4xlarge -> "4xlarge").
@@ -94,6 +98,9 @@ patch_file() {
     -e "s|__KEDA_GPU_CACHE_THRESHOLD__|${KEDA_GPU_CACHE_THRESHOLD}|g" \
     -e "s|__KEDA_TTFT_P95_THRESHOLD__|${KEDA_TTFT_P95_THRESHOLD}|g" \
     -e "s|__KEDA_SCALEUP_STABILIZATION__|${KEDA_SCALEUP_STABILIZATION}|g" \
+    -e "s|__PRESTOP_SLEEP_SECONDS__|${PRESTOP_SLEEP_SECONDS}|g" \
+    -e "s|__TERMINATION_GRACE_SECONDS__|${TERMINATION_GRACE_SECONDS}|g" \
+    -e "s|__NVIDIA_DEVICE_PLUGIN_VERSION__|v${NVIDIA_DEVICE_PLUGIN_VERSION}|g" \
     -e "s|__CLUSTER_NAME_VALUE__|${CLUSTER_NAME}|g" \
     -e "s|__KARPENTER_INSTANCE_SIZES__|${KARPENTER_INSTANCE_SIZES}|g" \
     -e "s|__NODEPOOL_CPU_LIMIT__|${NODEPOOL_CPU_LIMIT}|g" \
@@ -140,7 +147,7 @@ patch_file "${ROOT}/kubernetes/monitoring/cloudwatch-agent.yaml" "${OUT_DIR}/mon
 cp "${ROOT}/kubernetes/vllm/namespace.yaml" "${OUT_DIR}/vllm/"
 cp "${ROOT}/kubernetes/vllm/service.yaml" "${OUT_DIR}/vllm/"
 cp "${ROOT}/kubernetes/vllm/ingress-http.yaml" "${OUT_DIR}/vllm/"
-cp "${ROOT}/kubernetes/gpu/nvidia-device-plugin.yaml" "${OUT_DIR}/"
+patch_file "${ROOT}/kubernetes/gpu/nvidia-device-plugin.yaml" "${OUT_DIR}/nvidia-device-plugin.yaml"
 cp "${ROOT}/kubernetes/monitoring/namespace.yaml" "${OUT_DIR}/monitoring/"
 cp "${ROOT}/kubernetes/monitoring/servicemonitor.yaml" "${OUT_DIR}/monitoring/"
 cp "${ROOT}/kubernetes/monitoring/prometheus-rules.yaml" "${OUT_DIR}/monitoring/"
