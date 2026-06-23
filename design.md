@@ -1,89 +1,92 @@
-Step 1
-EKS
+# eks-vllm Dev Roadmap
 
-Step 2
-GPU Node
+**Philosophy:** boring first, optimize later. Steps 1–5 are the minimal dev path; Steps 6–8 are optional flags. Steps 9–10 are out of scope for `dev`.
 
-Step 3
-vLLM 0.5B
+---
 
-Step 4
-curl 成功
+## Steps
 
-Step 5
-GitHub Action 自动验证
+| Step | Goal | How to enable (dev) |
+|------|------|---------------------|
+| **1** | EKS cluster | Push to `dev` or `make apply TF_ENVIRONMENT=dev` |
+| **2** | GPU nodes | Karpenter NodePool (`g5.2xlarge` default on dev) |
+| **3** | vLLM 0.5B | `Qwen/Qwen2.5-0.5B-Instruct`, conservative vLLM args, 1 replica |
+| **4** | curl succeeds | `kubectl port-forward` → `/v1/models` or `/v1/chat/completions` |
+| **5** | CI smoke test | `deploy.yml` — rollout wait 45m + dev smoke test |
+| **6** | Prometheus | `DEV_ENABLE_PROMETHEUS=1` → `make install-prometheus TF_ENVIRONMENT=dev` |
+| **7** | KEDA | `DEV_ENABLE_KEDA=1` → `make install-keda TF_ENVIRONMENT=dev` (auto-enables Prometheus) |
+| **8** | ALB | `DEV_ENABLE_ALB=1` → `make install-alb TF_ENVIRONMENT=dev` |
+| **9** | Qwen 7B/8B | Change `MODEL_NAME` + instance type; not dev default |
+| **10** | Production | `main` branch → `prod` environment |
 
-Step 6
-Prometheus
-  DEV_ENABLE_PROMETHEUS=1 → make install-prometheus TF_ENVIRONMENT=dev
-  or GitHub dev env var DEV_ENABLE_PROMETHEUS=1 + Deploy
+### Step 6 — Prometheus
 
-Step 7
-KEDA
-  DEV_ENABLE_KEDA=1 → make install-keda TF_ENVIRONMENT=dev
-  or GitHub dev var DEV_ENABLE_KEDA=1 + Deploy
-  requires: Step 6 Prometheus (auto-enabled when KEDA is on)
+- GitHub: set repo/env var `DEV_ENABLE_PROMETHEUS=1`, push or re-run Deploy
+- Local: `make install-prometheus TF_ENVIRONMENT=dev`
+- Slim stack on dev (no Grafana/Alertmanager/node-exporter)
 
-Step 8
-ALB
-  DEV_ENABLE_ALB=1 → make install-alb TF_ENVIRONMENT=dev
-  or GitHub dev var DEV_ENABLE_ALB=1 + Deploy
-  HTTP (dev): DEV_ALB_HTTP_ONLY=1 — port 80, ALB DNS, no ACM
-  HTTPS: ACM_CERTIFICATE_ARN + INFERENCE_HOSTNAME (dev environment secrets)
+### Step 7 — KEDA
 
-Step 9
-Qwen 7B/8B
+- Requires Step 6 (Prometheus scraping `vllm:*` metrics)
+- Scale-out triggers (OR): **waiting queue** (primary), **max GPU KV cache**, **TTFT p95** (tertiary)
+- `tokens/sec` → Grafana + alerts only, **not** a KEDA trigger
+- Recording rules: `vllm:ttft:p95`, `vllm:e2e_latency:p95`, `vllm:generation_tps:sum`
 
-Step 10
-Production
+### Step 8 — ALB
 
+| Mode | Flags | Notes |
+|------|-------|-------|
+| HTTP (dev) | `DEV_ENABLE_ALB=1` + `DEV_ALB_HTTP_ONLY=1` | Port 80, ALB DNS — no ACM or hostname |
+| HTTPS | `DEV_ENABLE_ALB=1` + secrets `ACM_CERTIFICATE_ARN`, `INFERENCE_HOSTNAME` | Prod-style TLS |
 
+**Security note:** public ALB exposes the raw vLLM API. For prod, prefer internal ClusterIP (Route A) or ALB → LLM Gateway → vLLM (Route B). See README.
 
+### Recovery
 
+- Stale GPU nodes / NodeClaims: `make fix-gpu TF_ENVIRONMENT=dev`
+- Workflow: Actions → Reset → `fix-gpu` | `redeploy-k8s` | `reset-k8s`
 
-对照 design.md 的 dev 路线图，当前状态如下（分 代码/配置已具备 和 dev 上真正跑通 两层）：
+---
 
-Step	内容	代码/CI	dev 实际验证
-1
-EKS
-✅ terraform/environments/dev + Deploy workflow
-✅ 曾跑起来（qwen-vllm-dev）；你最近在 destroy，且 destroy 失败（ECR/IGW 依赖），集群可能半残
-2
-GPU Node
-✅ Karpenter NodePool g5.2xlarge
-⚠️ 不稳定 — 有时能起 GPU 节点，常因 NodeClaim / disrupted taint Pending
-3
-vLLM 0.5B
-✅ Qwen2.5-0.5B-Instruct + 保守 args
-⚠️ pod 曾 Started（init 下完、vLLM 在 load），rollout 时 Evicted，未稳定 1/1 Running
-4
-curl 成功
-✅ README + 本地 port-forward 说明
-❌ 未稳定确认 — CI smoke test 曾因 model 名错失败（已改 /models/...），本地你 kubeconfig/Pending 也未完成一次 curl
-5
-GitHub Action 自动验证
-✅ deploy.yml rollout 45m + dev smoke test
-❌ 整条 CI 尚未稳定绿 — 到过 smoke test 但失败；fix 后是否再跑过不确定
-6
-Prometheus
-✅ DEV_ENABLE_PROMETHEUS=1（可选）
-⚠️ 需验证 PromQL vllm:* 有数据
-7
-KEDA
-✅ DEV_ENABLE_KEDA=1（可选，自动开 Prometheus）
-⚠️ 主信号：waiting queue；辅：max gpu_cache；TTFT p95 第三触发
-⚠️ tokens/sec 仅 Grafana/alert，不进 KEDA
-⚠️ 需验证 ScaledObject Ready + recording rules `vllm:ttft:p95`
-8
-ALB
-✅ DEV_ENABLE_ALB=1（可选）
-✅ DEV_ALB_HTTP_ONLY=1 → HTTP 80，无需 ACM
-⚠️ HTTPS 需 ACM + hostname；验证 kubectl get ingress ADDRESS
-9
-Qwen 7B/8B
-❌ dev 默认仍是 0.5B
-❌ 未做
-10
-Production
-❌ 留给 main/prod
-❌ 不是 dev 目标
+## Status Tracker
+
+Two layers: **code/CI ready** vs **validated on dev cluster**.
+
+| Step | Goal | Code / CI | Dev validated |
+|------|------|-----------|---------------|
+| 1 | EKS | ✅ `terraform/environments/dev` + Deploy workflow | ⚠️ Cluster existed (`qwen-vllm-dev`); recent destroy may leave partial state (ECR/IGW deps) |
+| 2 | GPU node | ✅ Karpenter NodePool `g5.2xlarge` | ⚠️ Flaky — NodeClaim / `disrupted` taint → Pending |
+| 3 | vLLM 0.5B | ✅ `Qwen2.5-0.5B-Instruct` + conservative args | ⚠️ Pod reached Started; rollout Evicted — not stable 1/1 Running |
+| 4 | curl | ✅ README + port-forward docs | ❌ Not confirmed end-to-end (CI model path fixed; local curl blocked by Pending) |
+| 5 | CI smoke test | ✅ `deploy.yml` rollout + smoke test | ❌ Pipeline not consistently green |
+| 6 | Prometheus | ✅ `DEV_ENABLE_PROMETHEUS=1` | ⚠️ Confirm `vllm:*` series in PromQL |
+| 7 | KEDA | ✅ `DEV_ENABLE_KEDA=1` + production triggers | ⚠️ Confirm ScaledObject Ready + `vllm:ttft:p95` recording rule |
+| 8 | ALB | ✅ `DEV_ENABLE_ALB=1`, `DEV_ALB_HTTP_ONLY=1` | ⚠️ Confirm `kubectl get ingress` ADDRESS + HTTP curl |
+| 9 | Qwen 7B/8B | ❌ Dev still defaults to 0.5B | ❌ Not started |
+| 10 | Production | ❌ `main` / prod only | — not a dev goal |
+
+**Legend:** ✅ done · ⚠️ partial / needs verification · ❌ not done
+
+---
+
+## Dev Defaults (Steps 1–5 minimal path)
+
+Skipped unless flags set: ALB, KEDA, Prometheus, External Secrets, Ingress.
+
+| Setting | Dev value |
+|---------|-----------|
+| Model | `Qwen/Qwen2.5-0.5B-Instruct` |
+| Instance | `g5.2xlarge` |
+| Replicas | 1 |
+| PDB `minAvailable` | 0 |
+| Rollout `maxSurge` | 0 |
+
+---
+
+## Next actions
+
+1. Finish clean destroy or fresh `make apply` on dev
+2. Set GitHub vars: `DEV_ENABLE_PROMETHEUS=1`, `DEV_ENABLE_KEDA=1` (optional: `DEV_ENABLE_ALB=1`, `DEV_ALB_HTTP_ONLY=1`)
+3. Stabilize Steps 1–5 (1/1 Running + green CI smoke test)
+4. Verify Steps 6–8 in order
+5. Step 9+ on separate branch / prod when quota and stability allow
