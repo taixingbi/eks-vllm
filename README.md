@@ -160,10 +160,12 @@ Workflow **`.github/workflows/policy.yml`** runs on every PR and push to `dev` /
 **Local:**
 
 ```bash
-# P0 only (Terraform only)
-terraform fmt -check -recursive terraform/
-# full P0+P1 (install tflint + checkov first, e.g. brew install tflint && pipx install checkov)
-make lint-terraform
+  # P0 only (Terraform only)
+  terraform fmt -check -recursive terraform/
+  # full P0+P1 (install tflint + checkov first, e.g. brew install tflint && pipx install checkov)
+  make lint-terraform
+  # checkov only (environments + modules via composition; excludes bootstrap)
+  checkov -d terraform/environments --config-file .checkov.yml
 ```
 
 P2+ (kubeconform, conftest, image scan) not included yet.

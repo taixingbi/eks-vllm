@@ -90,7 +90,7 @@ jobs:
       - name: Run Checkov
         uses: bridgecrewio/checkov-action@v12
         with:
-          directory: terraform/
+          directory: terraform/environments
           framework: terraform
           config_file: .checkov.yml
           soft_fail: false

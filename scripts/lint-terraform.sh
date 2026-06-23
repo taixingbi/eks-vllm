@@ -44,8 +44,8 @@ fi
 
 if [[ "${SKIP_CHECKOV}" != "1" ]]; then
   if command -v checkov >/dev/null 2>&1; then
-    echo "==> checkov (terraform)"
-    checkov -d terraform --config-file "${ROOT}/.checkov.yml"
+    echo "==> checkov (terraform/environments)"
+    checkov -d terraform/environments --config-file "${ROOT}/.checkov.yml"
   else
     echo "WARN: checkov not installed; set SKIP_CHECKOV=1 or pip install checkov"
     exit 1
