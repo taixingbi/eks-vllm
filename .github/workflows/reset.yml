@@ -16,6 +16,7 @@ on:
           fix-gpu — clear stale NodeClaims/GPU nodes, re-apply vLLM (keeps cluster + PVC)
           redeploy-k8s — patch + kubectl apply (no Terraform/Helm)
           reset-k8s — delete all vLLM/Karpenter workloads, then redeploy-k8s
+          force-unlock — release stale Terraform state lock (requires lock_id)
         required: true
         default: fix-gpu
         type: choice
@@ -23,6 +24,11 @@ on:
           - fix-gpu
           - redeploy-k8s
           - reset-k8s
+          - force-unlock
+      lock_id:
+        description: Terraform lock ID (required for force-unlock; copy from Deploy error)
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -71,13 +77,28 @@ jobs:
           terraform_version: 1.15.6
 
       - name: Terraform Init
+        if: inputs.action != 'force-unlock'
         working-directory: terraform/environments/${{ inputs.environment }}
         run: terraform init
 
+      - name: Force-unlock Terraform state
+        if: inputs.action == 'force-unlock'
+        working-directory: terraform/environments/${{ inputs.environment }}
+        run: |
+          if [[ -z "${{ inputs.lock_id }}" ]]; then
+            echo "lock_id input is required for force-unlock"
+            exit 1
+          fi
+          terraform init -input=false
+          terraform force-unlock -force "${{ inputs.lock_id }}"
+          echo "Lock released. Re-run Deploy workflow."
+
       - name: Setup kubectl
+        if: inputs.action != 'force-unlock'
         uses: azure/setup-kubectl@v4
 
       - name: Configure kubectl
+        if: inputs.action != 'force-unlock'
         run: |
           CLUSTER_NAME=$(cd "terraform/environments/${TF_ENVIRONMENT}" && terraform output -raw cluster_name)
           aws eks update-kubeconfig --region "${AWS_REGION}" --name "${CLUSTER_NAME}"
@@ -98,6 +119,7 @@ jobs:
         run: ./scripts/deploy-k8s.sh
 
       - name: Wait for vLLM rollout
+        if: inputs.action != 'force-unlock'
         run: |
           if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
             kubectl rollout status deployment/vllm-qwen -n vllm --timeout=45m

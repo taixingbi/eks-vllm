@@ -172,13 +172,21 @@ P2+ (kubeconform, conftest, image scan) not included yet.
 
 ### Reset (manual recovery)
 
-**Actions → Reset → Run workflow** — does **not** run Terraform or Helm. Use when the cluster exists but vLLM is stuck (Pending GPU pods, evicted rollouts, stale NodeClaims).
+**Actions → Reset → Run workflow** — recovery when the cluster exists but vLLM is stuck, or Terraform state is locked.
+
+| Action | Use when |
+|--------|----------|
+| `fix-gpu` | Pending GPU pods, stale NodeClaims |
+| `redeploy-k8s` | Re-apply manifests only |
+| `reset-k8s` | Delete + redeploy K8s workloads |
+| `force-unlock` | Stale Terraform lock after crashed Deploy (paste **lock_id** from error) |
 
 | Action | Local equivalent | What it does |
 |---|---|---|
 | `fix-gpu` | `make fix-gpu` | Delete stale NodeClaims + GPU nodes, re-apply vLLM (keeps PVC/model cache) |
 | `redeploy-k8s` | `make deploy-k8s` | Patch manifests from Terraform outputs and `kubectl apply` |
 | `reset-k8s` | `AUTO_APPROVE=1 make delete-k8s` then `make deploy-k8s` | Remove vLLM/Karpenter workloads, then redeploy |
+| `force-unlock` | `LOCK_ID=<uuid> make force-unlock-terraform` | Release stale DynamoDB Terraform lock; then re-run Deploy |
 
 Uses the same concurrency group as **Deploy** (only one run per environment at a time). Prefer **`fix-gpu` on dev** first; use **`reset-k8s`** only when workloads are badly corrupted (deletes the model PVC). Add required reviewers on the **prod** GitHub Environment before allowing `reset-k8s` there.
 
@@ -490,7 +498,7 @@ kubectl get pods -n vllm -w
 | Pod Pending, `karpenter.sh/disrupted`, many NodeClaims | Stale GPU node/NodeClaim after evicted rollout | `make fix-gpu TF_ENVIRONMENT=dev` or **Actions → Reset → fix-gpu** |
 | `no such host` on kubectl | Stale kubeconfig after cluster recreate | `make kubeconfig-dev` or `aws eks update-kubeconfig --region us-east-1 --name qwen-vllm-dev` |
 | Wrong cluster / stale kubeconfig | Context points at destroyed env | `make kubeconfig-dev` or `make kubeconfig-prod` from repo root |
-| `Error acquiring the state lock` / `ConditionalCheckFailedException` | Another Deploy or local `terraform apply` holds the DynamoDB lock | Wait for **Actions → Deploy** to finish. If stale: `LOCK_ID=<uuid> TF_ENVIRONMENT=dev make force-unlock-terraform` then re-run Deploy. Do not use `-lock=false`. |
+| `Error acquiring the state lock` / `ConditionalCheckFailedException` | Stale or concurrent Terraform lock | Wait for Deploy to finish. If stale: **Actions → Reset → force-unlock** (paste lock ID) or `LOCK_ID=<uuid> TF_ENVIRONMENT=dev make force-unlock-terraform`, then re-run Deploy |
 
 ```bash
 # Port-forward for local test (dev model path)
