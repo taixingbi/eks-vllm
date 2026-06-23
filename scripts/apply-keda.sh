@@ -20,6 +20,7 @@ CLUSTER_NAME=$(terraform output -raw cluster_name)
 aws eks update-kubeconfig --region "${AWS_REGION}" --name "${CLUSTER_NAME}"
 
 "${ROOT}/scripts/patch-manifests.sh"
+kubectl apply -f "${OUT_DIR}/monitoring/prometheus-rules.yaml"
 kubectl apply -f "${OUT_DIR}/vllm/keda-scaledobject.yaml"
 
 echo "KEDA ScaledObject applied (${TF_ENVIRONMENT})."

@@ -71,7 +71,9 @@ Prometheus
 7
 KEDA
 ✅ DEV_ENABLE_KEDA=1（可选，自动开 Prometheus）
-⚠️ 需验证 ScaledObject Ready
+⚠️ 主信号：waiting queue；辅：max gpu_cache；TTFT p95 第三触发
+⚠️ tokens/sec 仅 Grafana/alert，不进 KEDA
+⚠️ 需验证 ScaledObject Ready + recording rules `vllm:ttft:p95`
 8
 ALB
 ✅ DEV_ENABLE_ALB=1（可选）

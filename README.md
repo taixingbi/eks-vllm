@@ -184,7 +184,18 @@ Verify:
 kubectl get pods -n keda
 kubectl get scaledobject -n vllm
 kubectl describe scaledobject vllm-qwen -n vllm
+kubectl get hpa -n vllm
 ```
+
+KEDA scale-out triggers (any fires → scale up):
+
+| Signal | PromQL | Dev threshold | Prod threshold |
+|--------|--------|---------------|----------------|
+| Waiting queue (primary) | `sum(vllm:num_requests_waiting{namespace="vllm"})` | > 2 | > 3 |
+| GPU KV cache pressure | `max(vllm:gpu_cache_usage_perc{namespace="vllm"})` | > 0.80 | > 0.80 |
+| TTFT p95 (tertiary) | `vllm:ttft:p95` | > 2s | > 2s |
+
+`tokens/sec` is used in Grafana and saturation alerts only — not as a KEDA trigger. Tune thresholds in `scripts/patch-manifests.sh` after load testing.
 
 ### Dev Step 8 — ALB Ingress (optional)
 
@@ -440,7 +451,9 @@ curl http://localhost:8000/v1/chat/completions \
 
 ### 6. Load test and verify autoscaling
 
-- Confirm KEDA scales replicas when GPU cache > 80% or queue depth > 5
+- Confirm KEDA scales replicas when **waiting queue** or **max GPU cache** exceeds thresholds (see Step 7 table)
+- Watch recording rules: `vllm:ttft:p95`, `vllm:generation_tps:sum` in Prometheus
+- Alerts: `VLLMThroughputSaturation` (queue + high tokens/sec), `VLLMThroughputStall` (queue + zero tokens/sec)
 - Confirm Karpenter launches Spot G5 nodes when pending GPU pods exist
 - Import Grafana dashboard from `kubernetes/monitoring/grafana-dashboard-vllm.json`
 
@@ -462,7 +475,7 @@ Ensure 2 On-Demand replicas across AZs (default in deployment). Update PDB to `m
 
 | Layer | Tool | Trigger |
 |---|---|---|
-| Pods | KEDA | `vllm:gpu_cache_usage_perc` > 80%, `vllm:num_requests_running` > 5 |
+| Pods | KEDA | waiting queue, max GPU cache, TTFT p95 (see `keda-scaledobject.yaml`) |
 | Nodes | Karpenter | Pending pods requesting `nvidia.com/gpu` |
 
 Optional ALB fallback scaler: `kubernetes/vllm/keda-scaledobject-alb-fallback.yaml` (apply instead of primary KEDA config).

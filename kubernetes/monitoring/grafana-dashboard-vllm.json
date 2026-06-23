@@ -31,7 +31,7 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "avg(vllm:gpu_cache_usage_perc{namespace=\"vllm\"})",
+          "expr": "max(vllm:gpu_cache_usage_perc{namespace=\"vllm\"})",
           "legendFormat": "gpu cache %"
         }
       ]
@@ -62,8 +62,8 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "histogram_quantile(0.99, sum(rate(vllm:time_to_first_token_seconds_bucket{namespace=\"vllm\"}[5m])) by (le))",
-          "legendFormat": "p99 TTFT"
+          "expr": "vllm:ttft:p95",
+          "legendFormat": "p95 TTFT"
         }
       ]
     },
@@ -76,7 +76,7 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "sum(rate(vllm:generation_tokens_total{namespace=\"vllm\"}[5m]))",
+          "expr": "vllm:generation_tps:sum",
           "legendFormat": "tokens/sec"
         }
       ]

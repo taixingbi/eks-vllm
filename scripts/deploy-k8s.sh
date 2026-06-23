@@ -79,18 +79,18 @@ elif [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
   echo "Enable Step 8: DEV_ENABLE_ALB=1 + DEV_ALB_HTTP_ONLY=1, or ACM_CERTIFICATE_ARN for HTTPS"
 fi
 
-if [[ "${ENABLE_KEDA}" == "1" ]]; then
-  kubectl apply -f "${OUT_DIR}/vllm/keda-scaledobject.yaml"
-elif [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
-  echo "Skipping KEDA on dev (minimal path)"
-  echo "Enable Step 7: DEV_ENABLE_KEDA=1 make apply-keda TF_ENVIRONMENT=dev"
-fi
-
 if [[ "${ENABLE_PROMETHEUS}" == "1" ]]; then
   kubectl apply -f "${OUT_DIR}/monitoring/"
 elif [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
   echo "Skipping monitoring on dev (minimal path)"
   echo "Enable Step 6: DEV_ENABLE_PROMETHEUS=1 make apply-monitoring TF_ENVIRONMENT=dev"
+fi
+
+if [[ "${ENABLE_KEDA}" == "1" ]]; then
+  kubectl apply -f "${OUT_DIR}/vllm/keda-scaledobject.yaml"
+elif [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
+  echo "Skipping KEDA on dev (minimal path)"
+  echo "Enable Step 7: DEV_ENABLE_KEDA=1 make apply-keda TF_ENVIRONMENT=dev"
 fi
 
 echo "Kubernetes deployment complete (${TF_ENVIRONMENT})."

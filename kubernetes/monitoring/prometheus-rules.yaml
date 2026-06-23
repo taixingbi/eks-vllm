@@ -7,6 +7,22 @@ metadata:
     release: kube-prometheus-stack
 spec:
   groups:
+    - name: vllm-qwen-recording
+      interval: 30s
+      rules:
+        - record: vllm:ttft:p95
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(vllm:time_to_first_token_seconds_bucket{namespace="vllm"}[5m])) by (le)
+            )
+        - record: vllm:e2e_latency:p95
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(vllm:e2e_request_latency_seconds_bucket{namespace="vllm"}[5m])) by (le)
+            )
+        - record: vllm:generation_tps:sum
+          expr: sum(rate(vllm:generation_tokens_total{namespace="vllm"}[2m]))
+
     - name: vllm-qwen
       rules:
         - alert: VLLMPodNotReady
@@ -20,13 +36,13 @@ spec:
             description: "Pod {{ $labels.pod }} in namespace vllm is not ready."
 
         - alert: VLLMHighGPUCacheUsage
-          expr: avg(vllm:gpu_cache_usage_perc{namespace="vllm"}) > 95
+          expr: max(vllm:gpu_cache_usage_perc{namespace="vllm"}) > 0.95
           for: 5m
           labels:
             severity: warning
           annotations:
-            summary: "vLLM GPU cache usage above 95%"
-            description: "Average GPU cache usage is {{ $value }}% — consider scaling replicas."
+            summary: "vLLM GPU KV cache above 95% on at least one replica"
+            description: "Max GPU cache usage is {{ $value | humanizePercentage }} — consider scaling replicas."
 
         - alert: VLLMHighRequestQueue
           expr: sum(vllm:num_requests_waiting{namespace="vllm"}) > 10
@@ -37,17 +53,45 @@ spec:
             summary: "vLLM request queue depth high"
             description: "{{ $value }} requests waiting — scale-out may be needed."
 
-        - alert: VLLMHighP99Latency
-          expr: |
-            histogram_quantile(0.99,
-              sum(rate(vllm:e2e_request_latency_seconds_bucket{namespace="vllm"}[5m])) by (le)
-            ) > 30
+        - alert: VLLMHighTTFT
+          expr: vllm:ttft:p95 > 2
+          for: 3m
+          labels:
+            severity: warning
+          annotations:
+            summary: "vLLM TTFT p95 exceeds 2s"
+            description: "p95 time-to-first-token is {{ $value }}s — check cold start, prompt length, or capacity."
+
+        - alert: VLLMHighP95Latency
+          expr: vllm:e2e_latency:p95 > 30
           for: 5m
           labels:
             severity: warning
           annotations:
-            summary: "vLLM p99 latency exceeds 30s"
-            description: "p99 end-to-end latency is {{ $value }}s."
+            summary: "vLLM p95 end-to-end latency exceeds 30s"
+            description: "p95 end-to-end latency is {{ $value }}s."
+
+        - alert: VLLMThroughputSaturation
+          expr: |
+            sum(vllm:num_requests_waiting{namespace="vllm"}) > 0
+            and vllm:generation_tps:sum > 20
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "vLLM saturated — queue building while generating tokens"
+            description: "{{ $value }} waiting requests with active generation throughput — scale-out likely needed."
+
+        - alert: VLLMThroughputStall
+          expr: |
+            sum(vllm:num_requests_waiting{namespace="vllm"}) > 3
+            and vllm:generation_tps:sum == 0
+          for: 3m
+          labels:
+            severity: warning
+          annotations:
+            summary: "vLLM queue growing with no token generation"
+            description: "Waiting queue is high but tokens/sec is zero — possible cold start, stuck requests, or scheduling issue."
 
         - alert: KarpenterSpotInterruptionRate
           expr: increase(karpenter_interruption_received_messages_total[15m]) > 3
