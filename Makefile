@@ -1,4 +1,4 @@
-.PHONY: bootstrap init plan apply patch install-controllers install-addons install-prometheus install-keda install-alb sync-hf-secret build-image deploy-k8s delete-k8s delete-addons destroy fix-gpu lint lint-terraform load-test-slo force-unlock-terraform
+.PHONY: bootstrap init plan apply patch install-controllers install-addons install-prometheus install-keda install-alb sync-hf-secret build-image deploy-k8s delete-k8s delete-addons destroy fix-gpu lint lint-terraform load-test-slo force-unlock-terraform fix-terraform-drift
 
 TF_ENVIRONMENT ?= prod
 TF_DIR = terraform/environments/$(TF_ENVIRONMENT)
@@ -85,3 +85,7 @@ load-test-slo:
 
 force-unlock-terraform:
 	LOCK_ID="$(LOCK_ID)" TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/force-unlock-terraform.sh
+
+# Import drifted AWS resources into state (default). Use ARGS="--delete" to force-remove SG rules + KMS alias.
+fix-terraform-drift:
+	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/fix-terraform-drift.sh $(ARGS)
