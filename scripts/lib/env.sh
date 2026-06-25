@@ -27,7 +27,7 @@ case "${TF_ENVIRONMENT}" in
   dev)
     export HF_SECRET_NAME="${HF_SECRET_NAME:-qwen-vllm-dev/hf-token}"
     if [[ -z "${INSTANCE_TYPE:-}" ]]; then export INSTANCE_TYPE=g5.2xlarge; else export INSTANCE_TYPE; fi
-    if [[ -z "${MODEL_NAME:-}" ]]; then export MODEL_NAME=Qwen/Qwen2.5-0.5B-Instruct; else export MODEL_NAME; fi
+    if [[ -z "${MODEL_NAME:-}" ]]; then export MODEL_NAME=Qwen/Qwen2.5-7B-Instruct; else export MODEL_NAME; fi
     ;;
 esac
 export MODEL_BASENAME="${MODEL_NAME##*/}"

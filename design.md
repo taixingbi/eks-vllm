@@ -10,13 +10,13 @@
 |------|------|---------------------|
 | **1** | EKS cluster | Push to `dev` or `make apply TF_ENVIRONMENT=dev` |
 | **2** | GPU nodes | Karpenter NodePool (`g5.2xlarge` default on dev) |
-| **3** | vLLM 0.5B | `Qwen/Qwen2.5-0.5B-Instruct`, conservative vLLM args, 1 replica |
+| **3** | vLLM 7B | `Qwen/Qwen2.5-7B-Instruct` on `g5.2xlarge`, tuned vLLM args, 1 replica |
 | **4** | curl succeeds | `kubectl port-forward` → `/v1/models` or `/v1/chat/completions` |
 | **5** | CI smoke test | `deploy.yml` — rollout wait 45m + dev smoke test |
 | **6** | Prometheus | `DEV_ENABLE_PROMETHEUS=1` → `make install-prometheus TF_ENVIRONMENT=dev` |
 | **7** | KEDA | `DEV_ENABLE_KEDA=1` → `make install-keda TF_ENVIRONMENT=dev` (auto-enables Prometheus) |
 | **8** | ALB | `DEV_ENABLE_ALB=1` → `make install-alb TF_ENVIRONMENT=dev` |
-| **9** | Qwen 7B/8B | Change `MODEL_NAME` + instance type; not dev default |
+| **9** | Larger models | Override `MODEL_NAME`; use `g5.4xlarge` for 8B+ or long context |
 | **10** | Production | `main` branch → `prod` environment |
 
 ### Step 6 — Prometheus
@@ -56,13 +56,13 @@ Two layers: **code/CI ready** vs **validated on dev cluster**.
 |------|------|-----------|---------------|
 | 1 | EKS | ✅ `terraform/environments/dev` + Deploy workflow | ⚠️ Cluster existed (`qwen-vllm-dev`); recent destroy may leave partial state (ECR/IGW deps) |
 | 2 | GPU node | ✅ Karpenter NodePool `g5.2xlarge` | ⚠️ Flaky — NodeClaim / `disrupted` taint → Pending |
-| 3 | vLLM 0.5B | ✅ `Qwen2.5-0.5B-Instruct` + conservative args | ⚠️ Pod reached Started; rollout Evicted — not stable 1/1 Running |
+| 3 | vLLM 7B | ✅ `Qwen2.5-7B-Instruct` + g5.2xlarge-tuned args | ⚠️ Needs cluster validation |
 | 4 | curl | ✅ README + port-forward docs | ❌ Not confirmed end-to-end (CI model path fixed; local curl blocked by Pending) |
 | 5 | CI smoke test | ✅ `deploy.yml` rollout + smoke test | ❌ Pipeline not consistently green |
 | 6 | Prometheus | ✅ `DEV_ENABLE_PROMETHEUS=1` | ⚠️ Confirm `vllm:*` series in PromQL |
 | 7 | KEDA | ✅ `DEV_ENABLE_KEDA=1` + production triggers | ⚠️ Confirm ScaledObject Ready + `vllm:ttft:p95` recording rule |
 | 8 | ALB | ✅ `DEV_ENABLE_ALB=1`, `DEV_ALB_HTTP_ONLY=1` | ⚠️ Confirm `kubectl get ingress` ADDRESS + HTTP curl |
-| 9 | Qwen 7B/8B | ❌ Dev still defaults to 0.5B | ❌ Not started |
+| 9 | Larger models | ✅ `MODEL_NAME` override + auto vLLM tuning in `patch-manifests.sh` | ⚠️ 0.5B still supported via `MODEL_NAME` override |
 | 10 | Production | ❌ `main` / prod only | — not a dev goal |
 
 **Legend:** ✅ done · ⚠️ partial / needs verification · ❌ not done
@@ -73,13 +73,18 @@ Two layers: **code/CI ready** vs **validated on dev cluster**.
 
 Skipped unless flags set: ALB, KEDA, Prometheus, External Secrets, Ingress.
 
-| Setting | Dev value |
-|---------|-----------|
-| Model | `Qwen/Qwen2.5-0.5B-Instruct` |
+| Setting | Dev value (7B default) |
+|---------|------------------------|
+| Model | `Qwen/Qwen2.5-7B-Instruct` |
 | Instance | `g5.2xlarge` |
+| `max-model-len` | `4096` (7B/8B); `2048` for smaller models |
+| `gpu-memory-utilization` | `0.85` (7B/8B); `0.75` for smaller models |
+| Pod memory limit | `20Gi` (7B/8B); `16Gi` for smaller models |
 | Replicas | 1 |
 | PDB `minAvailable` | 0 |
 | Rollout `maxSurge` | 0 |
+
+Override `MODEL_NAME` to `Qwen/Qwen2.5-0.5B-Instruct` for the lightweight profile.
 
 ---
 

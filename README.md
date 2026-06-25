@@ -96,7 +96,7 @@ Create GitHub **Environments** named `dev` and `prod` (Settings → Environments
 | Variable | Default | Purpose |
 |---|---|---|
 | `INSTANCE_TYPE` | `g5.4xlarge` | GPU instance type for Karpenter node pools |
-| `MODEL_NAME` | `Qwen/Qwen3-8B` | HuggingFace model ID (weights + vLLM serve path) |
+| `MODEL_NAME` | `Qwen/Qwen3-8B` (prod) / `Qwen/Qwen2.5-7B-Instruct` (dev) | HuggingFace model ID (weights + vLLM serve path) |
 | `DEV_ENABLE_PROMETHEUS` | *(unset)* | Set to `1` on **dev** to enable Step 6 (slim Prometheus + ServiceMonitor) |
 | `DEV_ENABLE_KEDA` | *(unset)* | Set to `1` on **dev** to enable Step 7 (KEDA + ScaledObject; also enables Prometheus) |
 | `DEV_ENABLE_ALB` | *(unset)* | Set to `1` on **dev** to enable Step 8 (ALB Controller + Ingress) |
@@ -509,7 +509,7 @@ curl http://localhost:8000/v1/models
 curl http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "/models/Qwen2.5-0.5B-Instruct",
+    "model": "/models/Qwen2.5-7B-Instruct",
     "messages": [{"role": "user", "content": "Hello"}],
     "max_tokens": 64
   }'
