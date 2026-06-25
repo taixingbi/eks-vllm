@@ -111,12 +111,16 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: ./scripts/sync-hf-secret.sh
 
+      - name: Free disk space for Docker build
+        run: ./scripts/ci-free-disk.sh
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Build and push vLLM image
         env:
           VLLM_IMAGE_TAG: v0.8.4
+          SKIP_ECR_BUILD_IF_EXISTS: "1"
         run: ./scripts/build-push-image.sh
 
       - name: Deploy Kubernetes manifests
