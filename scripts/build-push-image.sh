@@ -9,22 +9,6 @@ MODEL_DOWNLOADER_TAG="${MODEL_DOWNLOADER_TAG:-model-downloader}"
 # Skip rebuilding pinned vLLM tag when already in ECR (saves CI disk/time). Set FORCE_ECR_BUILD=1 to override.
 SKIP_ECR_BUILD_IF_EXISTS="${SKIP_ECR_BUILD_IF_EXISTS:-1}"
 
-cd "$TF_DIR"
-ECR_URL=$(terraform output -raw ecr_repository_url)
-ECR_REGISTRY="${ECR_URL%%/*}"
-ECR_REPO_NAME="${ECR_URL##*/}"
-
-aws ecr get-login-password --region "${AWS_REGION}" | \
-  docker login --username AWS --password-stdin "${ECR_REGISTRY}"
-
-ecr_image_exists() {
-  local tag=$1
-  aws ecr describe-images \
-    --region "${AWS_REGION}" \
-    --repository-name "${ECR_REPO_NAME}" \
-    --image-ids "imageTag=${tag}" >/dev/null 2>&1
-}
-
 docker_build_push() {
   local tag=$1
   local dockerfile=$2
@@ -46,8 +30,24 @@ docker_build_push() {
 }
 
 if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
-  "$(dirname "${BASH_SOURCE[0]}")/ci-free-disk.sh"
+  "${ROOT}/scripts/ci-free-disk.sh"
 fi
+
+cd "$TF_DIR"
+ECR_URL=$(terraform output -raw ecr_repository_url)
+ECR_REGISTRY="${ECR_URL%%/*}"
+ECR_REPO_NAME="${ECR_URL##*/}"
+
+aws ecr get-login-password --region "${AWS_REGION}" | \
+  docker login --username AWS --password-stdin "${ECR_REGISTRY}"
+
+ecr_image_exists() {
+  local tag=$1
+  aws ecr describe-images \
+    --region "${AWS_REGION}" \
+    --repository-name "${ECR_REPO_NAME}" \
+    --image-ids "imageTag=${tag}" >/dev/null 2>&1
+}
 
 if [[ "${SKIP_ECR_BUILD_IF_EXISTS}" == "1" ]] \
   && [[ "${FORCE_ECR_BUILD:-}" != "1" ]] \
