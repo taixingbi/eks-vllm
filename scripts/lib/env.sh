@@ -66,5 +66,12 @@ else
   export ALB_HTTP_ONLY=0
 fi
 
+# Prod full stack includes Grafana; dev enables with DEV_ENABLE_GRAFANA=1 (requires Prometheus).
+if [[ "${TF_ENVIRONMENT}" == "prod" ]] || [[ "${DEV_ENABLE_GRAFANA:-}" == "1" ]]; then
+  export ENABLE_GRAFANA=1
+else
+  export ENABLE_GRAFANA=0
+fi
+
 # shellcheck source=scripts/lib/chart-versions.sh
 source "$(dirname "${BASH_SOURCE[0]}")/chart-versions.sh"

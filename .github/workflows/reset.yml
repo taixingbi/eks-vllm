@@ -48,6 +48,7 @@ jobs:
       INSTANCE_TYPE: ${{ vars.INSTANCE_TYPE }}
       MODEL_NAME: ${{ vars.MODEL_NAME }}
       DEV_ENABLE_PROMETHEUS: ${{ vars.DEV_ENABLE_PROMETHEUS }}
+      DEV_ENABLE_GRAFANA: ${{ vars.DEV_ENABLE_GRAFANA }}
       DEV_ENABLE_KEDA: ${{ vars.DEV_ENABLE_KEDA }}
       DEV_ENABLE_ALB: ${{ vars.DEV_ENABLE_ALB }}
       DEV_ALB_HTTP_ONLY: ${{ vars.DEV_ALB_HTTP_ONLY }}

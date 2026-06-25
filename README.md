@@ -98,6 +98,7 @@ Create GitHub **Environments** named `dev` and `prod` (Settings → Environments
 | `INSTANCE_TYPE` | `g5.4xlarge` | GPU instance type for Karpenter node pools |
 | `MODEL_NAME` | `Qwen/Qwen3-8B` (prod) / `Qwen/Qwen2.5-7B-Instruct` (dev) | HuggingFace model ID (weights + vLLM serve path) |
 | `DEV_ENABLE_PROMETHEUS` | *(unset)* | Set to `1` on **dev** to enable Step 6 (slim Prometheus + ServiceMonitor) |
+| `DEV_ENABLE_GRAFANA` | *(unset)* | Set to `1` on **dev** to enable Grafana in slim Prometheus stack (requires Step 6) |
 | `DEV_ENABLE_KEDA` | *(unset)* | Set to `1` on **dev** to enable Step 7 (KEDA + ScaledObject; also enables Prometheus) |
 | `DEV_ENABLE_ALB` | *(unset)* | Set to `1` on **dev** to enable Step 8 (ALB Controller + Ingress) |
 | `DEV_ALB_HTTP_ONLY` | *(unset)* | Set to `1` on **dev** for HTTP-only ALB on port 80 (no ACM / hostname; use ALB DNS) |
@@ -202,7 +203,7 @@ Enable **after** vLLM curl / CI smoke test pass (Steps 4–5). Default dev deplo
 make install-prometheus TF_ENVIRONMENT=dev
 ```
 
-This installs a **slim** `kube-prometheus-stack` (no Grafana/Alertmanager/node-exporter) and applies ServiceMonitor + alert rules for vLLM.
+This installs a **slim** `kube-prometheus-stack` (no Alertmanager/node-exporter by default; Grafana when `DEV_ENABLE_GRAFANA=1`) and applies ServiceMonitor + alert rules for vLLM.
 
 Verify:
 

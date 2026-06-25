@@ -16,7 +16,6 @@ install_prometheus() {
   if [[ "${slim}" == "true" ]]; then
     prom_args+=(
       --set alertmanager.enabled=false
-      --set grafana.enabled=false
       --set kubeStateMetrics.enabled=false
       --set nodeExporter.enabled=false
       --set prometheus.prometheusSpec.resources.requests.cpu=100m
@@ -24,9 +23,14 @@ install_prometheus() {
       --set prometheus.prometheusSpec.resources.limits.cpu=500m
       --set prometheus.prometheusSpec.resources.limits.memory=512Mi
     )
+    if [[ "${ENABLE_GRAFANA}" == "1" ]]; then
+      prom_args+=(--set grafana.enabled=true)
+    else
+      prom_args+=(--set grafana.enabled=false)
+    fi
   fi
 
-  echo "Installing kube-prometheus-stack (slim=${slim})..."
+  echo "Installing kube-prometheus-stack (slim=${slim}, grafana=${ENABLE_GRAFANA:-0})..."
   helm_upgrade_install kube-prometheus-stack \
     oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack \
     "${prom_args[@]}"
@@ -63,7 +67,7 @@ if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
   fi
   if [[ "${ENABLE_PROMETHEUS}" == "1" ]] || [[ "${ENABLE_KEDA}" == "1" ]]; then
     chart_versions_print
-    echo "Cluster add-ons installed (${TF_ENVIRONMENT}, Prometheus=${ENABLE_PROMETHEUS}, KEDA=${ENABLE_KEDA})."
+    echo "Cluster add-ons installed (${TF_ENVIRONMENT}, Prometheus=${ENABLE_PROMETHEUS}, KEDA=${ENABLE_KEDA}, Grafana=${ENABLE_GRAFANA})."
   else
     echo "Skipping External Secrets, KEDA, and Prometheus on dev (minimal path)"
     echo "Enable Step 6: DEV_ENABLE_PROMETHEUS=1 make install-addons TF_ENVIRONMENT=dev"

@@ -23,7 +23,7 @@
 
 - GitHub: set repo/env var `DEV_ENABLE_PROMETHEUS=1`, push or re-run Deploy
 - Local: `make install-prometheus TF_ENVIRONMENT=dev`
-- Slim stack on dev (no Grafana/Alertmanager/node-exporter)
+- Slim stack on dev (Grafana when `DEV_ENABLE_GRAFANA=1`; no Alertmanager/node-exporter)
 
 ### Step 7 — KEDA
 
