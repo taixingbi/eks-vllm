@@ -335,9 +335,11 @@ See **[docs/destroy.md](docs/destroy.md)** for the full teardown flow, preserved
 After destroy (or partial destroy), before re-deploying the same environment:
 
 ```bash
-make fix-post-destroy TF_ENVIRONMENT=dev   # import orphaned subnets, EFS, S3 bucket
-make apply TF_ENVIRONMENT=dev
+make fix-post-destroy TF_ENVIRONMENT=dev   # import orphaned subnets, EFS, etc. (S3 also)
+make apply TF_ENVIRONMENT=dev            # auto-imports preserved S3 bucket if needed
 ```
+
+`make apply` and CI Deploy run `import-s3-models.sh` before Terraform, so a preserved model bucket is re-adopted without `BucketAlreadyExists` errors.
 
 If `terraform apply` fails with `InvalidSubnet.Conflict`, `MountTargetConflict`, or `BucketAlreadyExists`, run `make fix-post-destroy` then retry apply.
 

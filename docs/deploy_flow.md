@@ -112,7 +112,7 @@ IAM roles are created by Terraform; Helm charts are installed **after** apply (a
 
 ### Re-deploy after destroy
 
-If the model S3 bucket was preserved:
+If the model S3 bucket was preserved, `make apply` auto-imports it before Terraform runs (same in CI). For other orphaned resources (VPC subnets, EFS, NAT, etc.):
 
 ```bash
 make fix-post-destroy TF_ENVIRONMENT=dev   # import orphaned AWS + S3 bucket

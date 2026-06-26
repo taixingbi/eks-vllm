@@ -10,9 +10,11 @@ init:
 	cd $(TF_DIR) && terraform init
 
 plan:
+	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/import-s3-models.sh
 	cd $(TF_DIR) && terraform plan
 
 apply:
+	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/import-s3-models.sh
 	cd $(TF_DIR) && terraform apply
 
 patch:
