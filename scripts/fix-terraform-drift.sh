@@ -26,7 +26,7 @@ while [[ $# -gt 0 ]]; do
     -h|--help) usage 0 ;;
     --delete) MODE="delete"; shift ;;
     --import-only)
-      IMPORT_FILTER="${2:?--import-only requires: sg|kms|vpc|efs|s3|all}"
+      IMPORT_FILTER="${2:?--import-only requires: sg|kms|vpc|efs|s3|eks|all}"
       shift 2
       ;;
     *) echo "Unknown argument: $1"; usage 1 ;;
@@ -161,6 +161,57 @@ delete_kms_alias() {
   fi
 }
 
+import_cloudwatch_log_group() {
+  local log_group="/aws/eks/${CLUSTER}/cluster"
+  if ! aws logs describe-log-groups --region "$AWS_REGION" \
+    --log-group-name-prefix "$log_group" \
+    --query "logGroups[?logGroupName=='${log_group}'].logGroupName | [0]" \
+    --output text | grep -q "$log_group"; then
+    echo "  CloudWatch log group ${log_group} not found; apply will create it."
+    return 0
+  fi
+  tf_import 'module.eks.module.eks.aws_cloudwatch_log_group.this[0]' "$log_group"
+}
+
+import_nat_gateway() {
+  local vpc_id nat_id state_nat
+  vpc_id="$(aws ec2 describe-vpcs --region "$AWS_REGION" \
+    --filters "Name=tag:Name,Values=${NAME_PREFIX}" \
+    --query 'Vpcs[0].VpcId' --output text)"
+  if [[ -z "$vpc_id" || "$vpc_id" == "None" ]]; then
+    echo "  VPC not found; skip NAT gateway import."
+    return 0
+  fi
+
+  nat_id="$(aws ec2 describe-nat-gateways --region "$AWS_REGION" \
+    --filter "Name=vpc-id,Values=${vpc_id}" "Name=state,Values=available" \
+    --query 'NatGateways[0].NatGatewayId' --output text)"
+  if [[ -z "$nat_id" || "$nat_id" == "None" ]]; then
+    echo "  no available NAT gateway in VPC; apply will create one."
+    return 0
+  fi
+
+  if in_state 'module.vpc.module.vpc.aws_nat_gateway.this[0]'; then
+    state_nat="$(terraform state show -no-color 'module.vpc.module.vpc.aws_nat_gateway.this[0]' 2>/dev/null \
+      | awk '/^    id / { print $3 }')"
+    if [[ -n "$state_nat" && "$state_nat" != "$nat_id" ]]; then
+      echo "  replacing stale NAT in state (${state_nat} -> ${nat_id})"
+      terraform state rm 'module.vpc.module.vpc.aws_nat_gateway.this[0]'
+    fi
+  fi
+
+  local failed_nat
+  while IFS= read -r failed_nat; do
+    [[ -z "$failed_nat" || "$failed_nat" == "$nat_id" ]] && continue
+    echo "  deleting failed NAT ${failed_nat} ..."
+    aws ec2 delete-nat-gateway --region "$AWS_REGION" --nat-gateway-id "$failed_nat" >/dev/null 2>&1 || true
+  done < <(aws ec2 describe-nat-gateways --region "$AWS_REGION" \
+    --filter "Name=vpc-id,Values=${vpc_id}" "Name=state,Values=failed" \
+    --query 'NatGateways[*].NatGatewayId' --output text | tr '\t' '\n')
+
+  tf_import 'module.vpc.module.vpc.aws_nat_gateway.this[0]' "$nat_id"
+}
+
 import_vpc_public_subnets() {
   local vpc_id
   vpc_id="$(aws ec2 describe-vpcs --region "$AWS_REGION" \
@@ -207,6 +258,7 @@ import_efs_mount_targets() {
   local i=0
   for mt in "${mt_ids[@]}"; do
     tf_import "module.efs.aws_efs_mount_target.this[${i}]" "$mt"
+    i=$((i + 1))
   done
 }
 
@@ -229,10 +281,14 @@ run_import() {
     all)
       echo "=== Import VPC public subnets ==="
       import_vpc_public_subnets
+      echo "=== Import NAT gateway ==="
+      import_nat_gateway
       echo "=== Import EFS mount targets ==="
       import_efs_mount_targets
       echo "=== Import S3 model artifacts bucket ==="
       import_s3_models_bucket
+      echo "=== Import CloudWatch log group ==="
+      import_cloudwatch_log_group
       echo "=== Import KMS alias ==="
       import_kms_alias
       echo "=== Import EKS node SG rules ==="
@@ -240,9 +296,20 @@ run_import() {
       ;;
     sg) echo "=== Import EKS node SG rules ==="; import_sg_rules ;;
     kms) echo "=== Import KMS alias ==="; import_kms_alias ;;
-    vpc) echo "=== Import VPC public subnets ==="; import_vpc_public_subnets ;;
+    vpc)
+      echo "=== Import VPC public subnets ==="
+      import_vpc_public_subnets
+      echo "=== Import NAT gateway ==="
+      import_nat_gateway
+      ;;
     efs) echo "=== Import EFS mount targets ==="; import_efs_mount_targets ;;
     s3) echo "=== Import S3 model artifacts bucket ==="; import_s3_models_bucket ;;
+    eks)
+      echo "=== Import CloudWatch log group ==="
+      import_cloudwatch_log_group
+      echo "=== Import NAT gateway ==="
+      import_nat_gateway
+      ;;
     *) echo "Unknown --import-only filter: $IMPORT_FILTER"; exit 1 ;;
   esac
 }

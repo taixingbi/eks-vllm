@@ -322,6 +322,8 @@ Destroy everything for an environment (Kubernetes → Helm → `terraform destro
 AUTO_APPROVE=1 make destroy TF_ENVIRONMENT=dev
 ```
 
+See **[docs/destroy.md](docs/destroy.md)** for the full teardown flow, preserved resources, and a complete list of what gets destroyed.
+
 **Preserved by destroy:**
 - Terraform **bootstrap** state bucket (`prevent_destroy`)
 - **Model-artifacts S3 bucket** and all uploaded weights — `module.s3_models` is removed from Terraform state before destroy so objects are kept

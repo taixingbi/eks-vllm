@@ -9,7 +9,9 @@ preserve_s3_models_in_state() {
     return 0
   fi
 
-  if ! terraform -chdir="${tf_dir}" state list 2>/dev/null | grep -q '^module\.s3_models'; then
+  local state_list
+  state_list="$(terraform -chdir="${tf_dir}" state list 2>/dev/null)" || true
+  if [[ -z "$state_list" ]] || ! grep -q '^module\.s3_models' <<<"$state_list"; then
     echo "No module.s3_models in state; nothing to preserve."
     return 0
   fi

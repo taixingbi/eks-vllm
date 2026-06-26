@@ -129,7 +129,7 @@ CI: `.github/workflows/policy.yml` · Local: `make lint-terraform`
 | SLO alerts (`VLLMSLO*`) | ✅ |
 | Load test script | ✅ `scripts/load-test-slo.sh` |
 
-Details: **`docs/production-ha-slo.md`**
+Details: **[production-ha-slo.md](production-ha-slo.md)**
 
 ---
 
