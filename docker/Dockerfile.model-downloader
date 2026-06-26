@@ -1,4 +1,10 @@
-# Lightweight image for huggingface-cli model downloads (seed job + init container).
+# Lightweight image for S3 model sync (seed job + init container).
 FROM python:3.12-slim-bookworm
 
-RUN pip install --no-cache-dir "huggingface_hub[cli]==0.26.2"
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends awscli \
+  && rm -rf /var/lib/apt/lists/* \
+  && pip install --no-cache-dir "huggingface_hub[cli]==0.26.2"
+
+COPY docker/sync-model-from-s3.sh /usr/local/bin/sync-model-from-s3.sh
+RUN chmod +x /usr/local/bin/sync-model-from-s3.sh

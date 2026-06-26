@@ -84,6 +84,16 @@ output "external_secrets_role_arn" {
   value       = module.external_secrets.role_arn
 }
 
+output "model_artifacts_bucket_name" {
+  description = "S3 bucket for vLLM model weights"
+  value       = module.s3_models.bucket_name
+}
+
+output "vllm_model_s3_role_arn" {
+  description = "IRSA role ARN for vLLM ServiceAccount (S3 model read)"
+  value       = module.s3_models.vllm_s3_role_arn
+}
+
 output "configure_kubectl" {
   description = "Command to configure kubectl"
   value       = "aws eks update-kubeconfig --region ${var.aws_region} --name ${module.eks.cluster_name}"

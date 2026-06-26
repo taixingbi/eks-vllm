@@ -73,3 +73,13 @@ module "external_secrets" {
 
   tags = var.tags
 }
+
+module "s3_models" {
+  source = "../../modules/s3-models"
+
+  name              = var.name_prefix
+  cluster_name      = module.eks.cluster_name
+  oidc_provider_arn = module.eks.cluster_oidc_provider_arn
+
+  tags = var.tags
+}

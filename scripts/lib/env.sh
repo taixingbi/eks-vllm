@@ -31,7 +31,9 @@ case "${TF_ENVIRONMENT}" in
     ;;
 esac
 export MODEL_BASENAME="${MODEL_NAME##*/}"
-export MODEL_PATH="/models/${MODEL_BASENAME}"
+export MODEL_VERSION="${MODEL_VERSION:-v1}"
+export MODEL_PATH="/models/${MODEL_BASENAME}/${MODEL_VERSION}"
+export MODEL_S3_PREFIX="models/${MODEL_BASENAME}/${MODEL_VERSION}"
 export INSTANCE_FAMILY="${INSTANCE_TYPE%%.*}"
 export INSTANCE_SIZE="${INSTANCE_TYPE#*.}"
 

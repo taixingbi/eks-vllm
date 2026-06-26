@@ -6,6 +6,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/env.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/cluster.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/confirm.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/kubectl-delete.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/terminate-gpu-nodes.sh"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 
 if ! command -v kubectl >/dev/null 2>&1; then
@@ -38,6 +39,7 @@ if [[ -d "${OUT_DIR}/monitoring" ]]; then
 fi
 
 echo "Deleting Karpenter GPU pools..."
+kubectl delete nodeclaims --all --ignore-not-found --wait=false 2>/dev/null || true
 kubectl_delete_crd_kind nodepools.karpenter.sh nodepool g5-ondemand g5-spot
 kubectl_delete_crd_kind ec2nodeclasses.karpenter.k8s.aws ec2nodeclass g5-gpu
 
@@ -47,14 +49,7 @@ else
   kubectl_delete -f "${ROOT}/kubernetes/gpu/nvidia-device-plugin.yaml"
 fi
 
-echo "Waiting for GPU nodes to terminate..."
-for _ in $(seq 1 30); do
-  count=$(kubectl get nodes -l workload=gpu --no-headers 2>/dev/null | wc -l | tr -d ' ')
-  if [[ "${count}" == "0" ]]; then
-    break
-  fi
-  sleep 20
-done
+terminate_gpu_nodes "${CLUSTER_NAME}" "${AWS_REGION}" 900
 
 kubectl_delete namespace vllm
 kubectl_delete_crd_kind clustersecretstores.external-secrets.io clustersecretstore aws-secrets-manager

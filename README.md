@@ -7,7 +7,7 @@ Production-ready Terraform and Kubernetes manifests for serving **Qwen3-8B** via
 - **Baseline:** 2× On-Demand `g5.4xlarge` (1 vLLM replica per GPU, spread across AZs)
 - **Burst:** Karpenter Spot `g5.4xlarge` pool (up to ~8 nodes)
 - **Scaling:** KEDA scales pods; Karpenter provisions GPU nodes
-- **Storage:** EFS shared model cache (~16 GB weights)
+- **Storage:** S3 model artifacts (canonical) + EFS shared cache at pod runtime
 - **Ingress:** ALB with HTTPS, 300s idle timeout
 
 ## Prerequisites
@@ -22,7 +22,7 @@ Production-ready Terraform and Kubernetes manifests for serving **Qwen3-8B** via
 ```
 terraform/
   bootstrap/          # S3 + DynamoDB for remote state (run once)
-  modules/            # vpc, eks, efs, ecr, karpenter, alb-controller
+  modules/            # vpc, eks, efs, ecr, s3-models, karpenter, alb-controller
   environments/
     dev/              # Dev stack (branch: dev)
     prod/             # Production stack (branch: main)
@@ -322,11 +322,22 @@ Destroy everything for an environment (Kubernetes → Helm → `terraform destro
 AUTO_APPROVE=1 make destroy TF_ENVIRONMENT=dev
 ```
 
+**Preserved by destroy:**
+- Terraform **bootstrap** state bucket (`prevent_destroy`)
+- **Model-artifacts S3 bucket** and all uploaded weights — `module.s3_models` is removed from Terraform state before destroy so objects are kept
+
+**GPU cleanup:** destroy deletes NodeClaims/NodePools, force-removes GPU nodes from Kubernetes, and terminates any remaining G5 EC2 instances (EC2 API fallback if Karpenter is stuck).
+
+After destroy, before re-deploying the same environment:
+
+```bash
+make import-s3-models TF_ENVIRONMENT=dev   # re-attach existing model bucket to Terraform
+make apply TF_ENVIRONMENT=dev
+```
+
 Each command prompts for confirmation by typing the environment name (`dev` or `prod`) unless `AUTO_APPROVE=1` is set.
 
 If an environment was **never deployed**, delete/destroy exits cleanly after reporting `Cluster: qwen-vllm-dev (not deployed)` — no error.
-
-Bootstrap state (`terraform/bootstrap`) is not removed by `destroy` — the S3 bucket has `prevent_destroy` enabled.
 
 ### Environment sizing
 
@@ -398,19 +409,24 @@ Sync the HuggingFace token to Secrets Manager:
 HF_TOKEN=hf_xxx make sync-hf-secret TF_ENVIRONMENT=prod
 ```
 
-### 4. Build, push, and deploy
+### 4. Build, push, upload model, and deploy
 
 ```bash
 make build-image TF_ENVIRONMENT=prod
+
+# One-time per MODEL_NAME + MODEL_VERSION (default v1). ~15 GB for 7B.
+HF_TOKEN=hf_xxx make upload-model TF_ENVIRONMENT=prod
 
 ACM_CERTIFICATE_ARN=arn:aws:acm:... \
 INFERENCE_HOSTNAME=inference.example.com \
 make deploy-k8s TF_ENVIRONMENT=prod
 ```
 
-`make build-image` pushes the vLLM image (`:v0.8.4`) and a lightweight model downloader (`:model-downloader`) to ECR. Both are used by the deployment init container; prod also uses the downloader for the model-seed job.
+`make build-image` pushes the vLLM image (`:v0.8.4`) and the S3 sync helper (`:model-downloader-v2`) to ECR.
 
-`deploy-k8s` patches manifests from Terraform outputs, applies them in order, and waits for the model-seed job on prod (skipped on dev). Ingress is applied when `DEV_ALB_HTTP_ONLY=1` (HTTP) or when `ACM_CERTIFICATE_ARN` is set (HTTPS); otherwise skipped on dev.
+`make upload-model` downloads from Hugging Face locally and uploads versioned weights to the Terraform-managed S3 bucket (`s3://{prefix}-model-artifacts/models/{model}/{version}/`). **If that version already exists in S3, the script exits immediately** (no HuggingFace re-download). Use `FORCE_UPLOAD=1` to overwrite. Set `MODEL_VERSION=v2` when promoting a new revision; bump the GitHub repo var `MODEL_VERSION` to match.
+
+`deploy-k8s` verifies the S3 manifest exists, runs the **model-seed** job on a system node (S3 → EFS), then rolls out vLLM. The init container re-syncs only when the version changes.
 
 Patched manifests are written to `kubernetes/.generated/<env>/`.
 
@@ -476,7 +492,7 @@ Placeholders replaced by `patch-manifests.sh`:
 - `CLUSTER_NAME`, `KARPENTER_NODE_ROLE_NAME`, `INSTANCE_PROFILE`
 - `FILE_SYSTEM_ID`, `ACCESS_POINT_ID`, `ECR_REPOSITORY_URL`
 - `ACM_CERTIFICATE_ARN`, `CLOUDWATCH_AGENT_ROLE_ARN`, `INFERENCE_HOSTNAME`
-- `__MODEL_ID_VALUE__`, `__MODEL_PATH_VALUE__`, `__VLLM_REPLICAS__`, `INSTANCE_FAMILY`, `INSTANCE_SIZE` (from `MODEL_NAME` / `INSTANCE_TYPE` env vars; dev uses 1 vLLM replica, prod uses 2)
+- `__MODEL_ID_VALUE__`, `__MODEL_PATH_VALUE__`, `__MODEL_VERSION_VALUE__`, `__MODEL_S3_BUCKET__`, `__VLLM_MODEL_S3_ROLE_ARN__`, `__VLLM_REPLICAS__`, `INSTANCE_FAMILY`, `INSTANCE_SIZE` (from `MODEL_NAME`, `MODEL_VERSION`, `INSTANCE_TYPE`; dev uses 1 vLLM replica, prod uses 2)
 
 </details>
 
@@ -492,9 +508,11 @@ kubectl get pods -n vllm -w
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `model-seed` Pending, `Insufficient cpu` | Dev has one `m6i.large`; Karpenter + Prometheus consume most CPU | On **dev**, model-seed is skipped — delete the stuck job and redeploy: `kubectl delete job model-seed -n vllm && make deploy-k8s TF_ENVIRONMENT=dev`. vLLM downloads via init container on the GPU node. |
-| `ImagePullBackOff` on `huggingface/huggingface_hub` | That Docker Hub image does not exist | Run `make build-image TF_ENVIRONMENT=dev` (pushes `:model-downloader` to ECR), delete the job, redeploy |
-| No GPU nodes | Karpenter only adds GPU nodes when pods request `nvidia.com/gpu` | Wait for vLLM deployment after model-seed completes (prod) or after deploy applies vLLM (dev) |
+| Deploy fails: model not found in S3 | Weights not uploaded for `MODEL_VERSION` | `make upload-model TF_ENVIRONMENT=dev` (set `MODEL_VERSION` if not `v1`) |
+| `model-seed` fails / S3 access denied | IRSA not applied or wrong bucket | `terraform apply`, redeploy; check SA annotation: `kubectl get sa vllm -n vllm -o yaml` |
+| `model-seed` Pending, `Insufficient cpu` | System node out of CPU | Scale system node group or temporarily reduce addon CPU; check `kubectl describe pod -n vllm -l job-name=model-seed` |
+| `ImagePullBackOff` on model-downloader | ECR image missing | `make build-image TF_ENVIRONMENT=dev` (pushes `:model-downloader-v2`), redeploy |
+| No GPU nodes | Karpenter only adds GPU nodes when pods request `nvidia.com/gpu` | Wait for model-seed to complete, then vLLM deployment |
 | `VcpuLimitExceeded` / GPU node won't launch | Default G/VT vCPU quota is often 8; `g5.4xlarge` needs 16 | Dev defaults to `g5.2xlarge`. For prod, request quota increase: [AWS EC2 quota request](https://console.aws.amazon.com/servicequotas/) → **Running On-Demand G and VT instances** → at least 32 |
 | Pod Pending, `karpenter.sh/disrupted`, many NodeClaims | Stale GPU node/NodeClaim after evicted rollout | `make fix-gpu TF_ENVIRONMENT=dev` or **Actions → Reset → fix-gpu** |
 | `no such host` on kubectl | Stale kubeconfig after cluster recreate | `make kubeconfig-dev` or `aws eks update-kubeconfig --region us-east-1 --name qwen-vllm-dev` |
@@ -510,7 +528,7 @@ curl http://localhost:8000/v1/models
 curl http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "/models/Qwen2.5-7B-Instruct",
+    "model": "/models/Qwen2.5-7B-Instruct/v1",
     "messages": [{"role": "user", "content": "Hello"}],
     "max_tokens": 64
   }'

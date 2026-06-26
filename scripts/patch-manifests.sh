@@ -18,6 +18,8 @@ EFS_FS_ID=$(terraform output -raw efs_file_system_id)
 EFS_AP_ID=$(terraform output -raw efs_access_point_id)
 ECR_URL=$(terraform output -raw ecr_repository_url)
 CW_ROLE_ARN=$(terraform output -raw cloudwatch_agent_role_arn)
+MODEL_S3_BUCKET=$(terraform output -raw model_artifacts_bucket_name)
+VLLM_MODEL_S3_ROLE_ARN=$(terraform output -raw vllm_model_s3_role_arn)
 ACM_CERTIFICATE_ARN="${ACM_CERTIFICATE_ARN:-}"
 INFERENCE_HOSTNAME="${INFERENCE_HOSTNAME:-inference.example.com}"
 
@@ -108,6 +110,10 @@ patch_file() {
     -e "s|CLOUDWATCH_AGENT_ROLE_ARN|${CW_ROLE_ARN}|g" \
     -e "s|__MODEL_ID_VALUE__|${MODEL_NAME}|g" \
     -e "s|__MODEL_PATH_VALUE__|${MODEL_PATH}|g" \
+    -e "s|__MODEL_VERSION_VALUE__|${MODEL_VERSION}|g" \
+    -e "s|__MODEL_S3_BUCKET__|${MODEL_S3_BUCKET}|g" \
+    -e "s|__MODEL_S3_PREFIX__|${MODEL_S3_PREFIX}|g" \
+    -e "s|__VLLM_MODEL_S3_ROLE_ARN__|${VLLM_MODEL_S3_ROLE_ARN}|g" \
     -e "s|__VLLM_REPLICAS__|${VLLM_REPLICAS}|g" \
     -e "s|__KEDA_MIN_REPLICAS__|${KEDA_MIN_REPLICAS}|g" \
     -e "s|__KEDA_WAITING_THRESHOLD__|${KEDA_WAITING_THRESHOLD}|g" \
@@ -170,7 +176,9 @@ cp "${ROOT}/kubernetes/monitoring/prometheus-rules.yaml" "${OUT_DIR}/monitoring/
 
 echo "Patched manifests written to ${OUT_DIR} (${TF_ENVIRONMENT})"
 echo "  MODEL_NAME=${MODEL_NAME}"
+echo "  MODEL_VERSION=${MODEL_VERSION}"
 echo "  MODEL_PATH=${MODEL_PATH}"
+echo "  MODEL_S3=s3://${MODEL_S3_BUCKET}/${MODEL_S3_PREFIX}"
 echo "  INSTANCE_TYPE=${INSTANCE_TYPE}"
 echo "  KARPENTER_INSTANCE_SIZES=[${KARPENTER_INSTANCE_SIZES}]"
 echo "  NODEPOOL_LIMITS=cpu:${NODEPOOL_CPU_LIMIT},memory:${NODEPOOL_MEMORY_LIMIT}"

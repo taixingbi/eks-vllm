@@ -5,7 +5,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib/env.sh"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 VLLM_IMAGE_TAG="${VLLM_IMAGE_TAG:-v0.8.4}"
-MODEL_DOWNLOADER_TAG="${MODEL_DOWNLOADER_TAG:-model-downloader}"
+MODEL_DOWNLOADER_TAG="${MODEL_DOWNLOADER_TAG:-model-downloader-v2}"
 # Skip rebuilding pinned vLLM tag when already in ECR (saves CI disk/time). Set FORCE_ECR_BUILD=1 to override.
 SKIP_ECR_BUILD_IF_EXISTS="${SKIP_ECR_BUILD_IF_EXISTS:-1}"
 

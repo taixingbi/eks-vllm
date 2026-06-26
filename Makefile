@@ -1,4 +1,4 @@
-.PHONY: bootstrap init plan apply patch install-controllers install-addons install-prometheus install-keda install-alb sync-hf-secret build-image deploy-k8s delete-k8s delete-addons destroy fix-gpu lint lint-terraform load-test-slo force-unlock-terraform fix-terraform-drift
+.PHONY: bootstrap init plan apply patch install-controllers install-addons install-prometheus install-keda install-alb sync-hf-secret build-image upload-model import-s3-models deploy-k8s delete-k8s delete-addons destroy fix-gpu lint lint-terraform load-test-slo force-unlock-terraform fix-terraform-drift
 
 TF_ENVIRONMENT ?= prod
 TF_DIR = terraform/environments/$(TF_ENVIRONMENT)
@@ -49,6 +49,12 @@ sync-hf-secret:
 
 build-image:
 	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/build-push-image.sh
+
+upload-model:
+	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/upload-model-to-s3.sh
+
+import-s3-models:
+	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/import-s3-models.sh
 
 deploy-k8s:
 	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/deploy-k8s.sh

@@ -2,6 +2,8 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+data "aws_region" "current" {}
+
 locals {
   azs = slice(data.aws_availability_zones.available.names, 0, var.az_count)
 }
@@ -34,4 +36,16 @@ module "vpc" {
   }
 
   tags = var.tags
+}
+
+# Gateway endpoint keeps S3 traffic off NAT (faster model sync from GPU/system nodes).
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id            = module.vpc.vpc_id
+  service_name      = "com.amazonaws.${data.aws_region.current.name}.s3"
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = module.vpc.private_route_table_ids
+
+  tags = merge(var.tags, {
+    Name = "${var.name}-s3"
+  })
 }

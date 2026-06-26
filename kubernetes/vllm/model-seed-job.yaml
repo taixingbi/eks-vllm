@@ -1,5 +1,4 @@
-# One-time job to pre-seed model weights on EFS before rolling out vLLM.
-# Requires hf-token secret in vllm namespace.
+# Pre-seed model weights on EFS from S3 before rolling out vLLM (runs on system node).
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -10,46 +9,31 @@ spec:
   backoffLimit: 2
   template:
     spec:
+      serviceAccountName: vllm
       restartPolicy: OnFailure
       nodeSelector:
         role: system
       containers:
-        - name: download
-          image: ECR_REPOSITORY_URL:model-downloader
+        - name: sync-model
+          image: ECR_REPOSITORY_URL:model-downloader-v2
           imagePullPolicy: IfNotPresent
           env:
-            - name: HF_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: hf-token
-                  key: token
-                  optional: true
-            - name: MODEL_ID
-              value: __MODEL_ID_VALUE__
             - name: MODEL_PATH
               value: __MODEL_PATH_VALUE__
+            - name: MODEL_S3_URI
+              value: s3://__MODEL_S3_BUCKET__/__MODEL_S3_PREFIX__
           command:
-            - /bin/sh
-            - -c
-            - |
-              set -e
-              if [ -f "${MODEL_PATH}/config.json" ]; then
-                echo "Model already present."
-                exit 0
-              fi
-              huggingface-cli download "${MODEL_ID}" \
-                --local-dir "${MODEL_PATH}" \
-                --local-dir-use-symlinks False
+            - /usr/local/bin/sync-model-from-s3.sh
           volumeMounts:
             - name: model-cache
               mountPath: /models
           resources:
             requests:
-              cpu: "100m"
-              memory: 256Mi
-            limits:
               cpu: "500m"
               memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
       volumes:
         - name: model-cache
           persistentVolumeClaim:

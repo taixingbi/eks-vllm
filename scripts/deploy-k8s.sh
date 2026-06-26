@@ -12,6 +12,16 @@ aws eks update-kubeconfig --region "${AWS_REGION}" --name "${CLUSTER_NAME}"
 
 "${ROOT}/scripts/patch-manifests.sh"
 
+cd "$TF_DIR"
+MODEL_S3_BUCKET=$(terraform output -raw model_artifacts_bucket_name)
+S3_MANIFEST="s3://${MODEL_S3_BUCKET}/${MODEL_S3_PREFIX}/.model-manifest.json"
+echo "Checking model artifacts at ${S3_MANIFEST} ..."
+if ! aws s3 ls "${S3_MANIFEST}" >/dev/null 2>&1; then
+  echo "ERROR: Model not found in S3. Upload first:"
+  echo "  make upload-model TF_ENVIRONMENT=${TF_ENVIRONMENT} MODEL_VERSION=${MODEL_VERSION}"
+  exit 1
+fi
+
 if [[ "${TF_ENVIRONMENT}" != "dev" ]]; then
   TMP_SECRETS=$(mktemp)
   trap 'rm -f "$TMP_SECRETS"' EXIT
@@ -53,13 +63,11 @@ kubectl apply -f "${OUT_DIR}/vllm/configmap.yaml"
 kubectl apply -f "${OUT_DIR}/vllm/pvc-efs.yaml"
 
 kubectl delete job/model-seed -n vllm --ignore-not-found
-if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
-  echo "Skipping model-seed on dev (vLLM init container downloads on GPU node)"
-else
-  kubectl apply -f "${OUT_DIR}/vllm/model-seed-job.yaml"
-  if ! kubectl wait --for=condition=complete job/model-seed -n vllm --timeout=3600s 2>/dev/null; then
-    echo "model-seed job still running or already completed; continuing"
-  fi
+kubectl apply -f "${OUT_DIR}/vllm/model-seed-job.yaml"
+if ! kubectl wait --for=condition=complete job/model-seed -n vllm --timeout=3600s 2>/dev/null; then
+  echo "model-seed job still running or failed; check: kubectl logs -n vllm job/model-seed"
+  kubectl logs -n vllm job/model-seed --tail=50 2>/dev/null || true
+  exit 1
 fi
 
 kubectl apply -f "${OUT_DIR}/vllm/deployment.yaml"
