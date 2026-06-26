@@ -159,6 +159,7 @@ patch_file "${ROOT}/kubernetes/karpenter/nodepool-g5-ondemand.yaml" "${OUT_DIR}/
 patch_file "${ROOT}/kubernetes/karpenter/nodepool-g5-spot.yaml" "${OUT_DIR}/karpenter/nodepool-g5-spot.yaml"
 
 patch_file "${ROOT}/kubernetes/vllm/pvc-efs.yaml" "${OUT_DIR}/vllm/pvc-efs.yaml"
+patch_file "${ROOT}/kubernetes/vllm/serviceaccount.yaml" "${OUT_DIR}/vllm/serviceaccount.yaml"
 patch_file "${ROOT}/kubernetes/vllm/deployment.yaml" "${OUT_DIR}/vllm/deployment.yaml"
 patch_file "${ROOT}/kubernetes/vllm/configmap.yaml" "${OUT_DIR}/vllm/configmap.yaml"
 patch_file "${ROOT}/kubernetes/vllm/model-seed-job.yaml" "${OUT_DIR}/vllm/model-seed-job.yaml"

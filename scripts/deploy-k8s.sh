@@ -61,6 +61,7 @@ fi
 kubectl apply -f "${OUT_DIR}/nvidia-device-plugin.yaml"
 kubectl apply -f "${OUT_DIR}/vllm/configmap.yaml"
 kubectl apply -f "${OUT_DIR}/vllm/pvc-efs.yaml"
+kubectl apply -f "${OUT_DIR}/vllm/serviceaccount.yaml"
 
 kubectl delete job/model-seed -n vllm --ignore-not-found
 kubectl apply -f "${OUT_DIR}/vllm/model-seed-job.yaml"

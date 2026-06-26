@@ -155,15 +155,6 @@ spec:
             sizeLimit: __VLLM_SHM_SIZE__
 
 ---
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: vllm
-  namespace: vllm
-  annotations:
-    eks.amazonaws.com/role-arn: __VLLM_MODEL_S3_ROLE_ARN__
-
----
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:

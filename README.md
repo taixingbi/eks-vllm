@@ -13,6 +13,7 @@ Production-ready Terraform and Kubernetes manifests for serving **Qwen3-8B** via
 ## Prerequisites
 
 - AWS CLI, Terraform >= 1.5, kubectl, Helm >= 3
+- **`hf`** or **`huggingface-cli`** for `make upload-model` (`pip install huggingface_hub[cli]`)
 - AWS account with `g5.4xlarge` quota in target region
 - ACM certificate for your inference hostname
 - HuggingFace token (optional, for gated models)
@@ -432,7 +433,7 @@ make deploy-k8s TF_ENVIRONMENT=prod
 
 `make build-image` pushes the vLLM image (`:v0.8.4`) and the S3 sync helper (`:model-downloader-v2`) to ECR.
 
-`make upload-model` downloads from Hugging Face locally and uploads versioned weights to the Terraform-managed S3 bucket (`s3://{prefix}-model-artifacts/models/{model}/{version}/`). **If that version already exists in S3, the script exits immediately** (no HuggingFace re-download). Use `FORCE_UPLOAD=1` to overwrite. Set `MODEL_VERSION=v2` when promoting a new revision; bump the GitHub repo var `MODEL_VERSION` to match.
+`make upload-model` downloads from Hugging Face locally (`hf download` preferred) and uploads versioned weights to the Terraform-managed S3 bucket (`s3://{prefix}-model-artifacts/models/{model}/{version}/`). **If that version already exists in S3, the script exits immediately** (no HuggingFace re-download). Use `FORCE_UPLOAD=1` to overwrite. Set `MODEL_VERSION=v2` when promoting a new revision; bump the GitHub repo var `MODEL_VERSION` to match.
 
 `deploy-k8s` verifies the S3 manifest exists, runs the **model-seed** job on a system node (S3 → EFS), then rolls out vLLM. The init container re-syncs only when the version changes.
 

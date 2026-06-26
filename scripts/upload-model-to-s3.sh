@@ -9,10 +9,36 @@ if ! command -v aws >/dev/null 2>&1; then
   echo "aws CLI is required"
   exit 1
 fi
-if ! command -v huggingface-cli >/dev/null 2>&1; then
-  echo "huggingface-cli is required (pip install huggingface_hub[cli])"
-  exit 1
-fi
+
+resolve_hf_cli() {
+  if command -v hf >/dev/null 2>&1; then
+    echo hf
+  elif command -v huggingface-cli >/dev/null 2>&1; then
+    echo huggingface-cli
+  else
+    echo "hf or huggingface-cli is required (pip install huggingface_hub[cli])" >&2
+    return 1
+  fi
+}
+
+hf_download_model() {
+  local cli model local_dir
+  cli="$(resolve_hf_cli)"
+  model="$1"
+  local_dir="$2"
+
+  if [[ "$cli" == hf ]]; then
+    if [[ -n "${HF_TOKEN:-}" ]]; then
+      hf download "$model" --local-dir "$local_dir" --token "$HF_TOKEN"
+    else
+      hf download "$model" --local-dir "$local_dir"
+    fi
+  else
+    HF_TOKEN="${HF_TOKEN:-}" huggingface-cli download "$model" \
+      --local-dir "$local_dir" \
+      --local-dir-use-symlinks False
+  fi
+}
 
 cd "$TF_DIR"
 BUCKET=$(terraform output -raw model_artifacts_bucket_name)
@@ -45,9 +71,7 @@ fi
 if [[ ! -f "${LOCAL_DIR}/config.json" ]]; then
   echo "Model not in S3 (or FORCE_UPLOAD=1); downloading ${MODEL_NAME} from HuggingFace..."
   mkdir -p "${LOCAL_DIR}"
-  HF_TOKEN="${HF_TOKEN:-}" huggingface-cli download "${MODEL_NAME}" \
-    --local-dir "${LOCAL_DIR}" \
-    --local-dir-use-symlinks False
+  hf_download_model "${MODEL_NAME}" "${LOCAL_DIR}"
 fi
 
 echo "Writing manifest..."

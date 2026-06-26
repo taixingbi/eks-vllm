@@ -215,10 +215,11 @@ make deploy-k8s TF_ENVIRONMENT=dev
 3. **External Secrets** (prod only) — ClusterSecretStore + HF token ExternalSecret
 4. **Karpenter** — EC2NodeClass + NodePool (`g5-ondemand`; spot pool on prod only)
 5. **NVIDIA device plugin**
-6. **model-seed Job** — sync S3 → EFS on a system node (waits up to 60m)
-7. **vLLM Deployment** + Service
-8. **Ingress** — if `DEV_ENABLE_ALB=1` or prod
-9. **Monitoring / KEDA** — if respective flags set
+6. **ServiceAccount `vllm`** (IRSA for S3 read) — before model-seed
+7. **model-seed Job** — sync S3 → EFS on a system node (waits up to 60m)
+8. **vLLM Deployment** + Service
+9. **Ingress** — if `DEV_ENABLE_ALB=1` or prod
+10. **Monitoring / KEDA** — if respective flags set
 
 ### Model path at runtime
 
