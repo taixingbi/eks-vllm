@@ -26,7 +26,7 @@ while [[ $# -gt 0 ]]; do
     -h|--help) usage 0 ;;
     --delete) MODE="delete"; shift ;;
     --import-only)
-      IMPORT_FILTER="${2:?--import-only requires: sg|kms|vpc|efs|all}"
+      IMPORT_FILTER="${2:?--import-only requires: sg|kms|vpc|efs|s3|all}"
       shift 2
       ;;
     *) echo "Unknown argument: $1"; usage 1 ;;
@@ -46,7 +46,7 @@ cd "$TF_DIR"
 terraform init -input=false >/dev/null
 
 in_state() {
-  terraform state list 2>/dev/null | grep -qF "$1"
+  terraform state show "$1" >/dev/null 2>&1
 }
 
 tf_import() {
@@ -113,10 +113,13 @@ delete_sg_rules() {
     --filters "Name=group-id,Values=${node_sg}" \
     --query 'SecurityGroupRules[?IsEgress==`true` && CidrIpv4==`0.0.0.0/0` && IpProtocol==`-1`].SecurityGroupRuleId' \
     --output text | grep -q sgr-; then
-    mapfile -t egress_ids < <(aws ec2 describe-security-group-rules --region "$AWS_REGION" \
-      --filters "Name=group-id,Values=${node_sg}" \
-      --query 'SecurityGroupRules[?IsEgress==`true` && CidrIpv4==`0.0.0.0/0` && IpProtocol==`-1`].SecurityGroupRuleId' \
-      --output text | tr '\t' '\n')
+  local egress_ids=()
+  while IFS= read -r rule_id; do
+    [[ -n "$rule_id" ]] && egress_ids+=("$rule_id")
+  done < <(aws ec2 describe-security-group-rules --region "$AWS_REGION" \
+    --filters "Name=group-id,Values=${node_sg}" \
+    --query 'SecurityGroupRules[?IsEgress==`true` && CidrIpv4==`0.0.0.0/0` && IpProtocol==`-1`].SecurityGroupRuleId' \
+    --output text | tr '\t' '\n')
     aws ec2 revoke-security-group-egress --region "$AWS_REGION" \
       --group-id "$node_sg" --security-group-rule-ids "${egress_ids[@]}"
     echo "  deleted egress_all (${#egress_ids[@]} rule(s))"
@@ -129,7 +132,10 @@ delete_sg_rules() {
     --filters "Name=group-id,Values=${node_sg}" \
     --query "SecurityGroupRules[?IsEgress==\`false\` && IpProtocol==\`tcp\` && FromPort==\`8443\` && ReferencedGroupInfo.GroupId==\`${cluster_sg}\`].SecurityGroupRuleId" \
     --output text | grep -q sgr-; then
-    mapfile -t ingress_ids < <(aws ec2 describe-security-group-rules --region "$AWS_REGION" \
+    local ingress_ids=()
+    while IFS= read -r rule_id; do
+      [[ -n "$rule_id" ]] && ingress_ids+=("$rule_id")
+    done < <(aws ec2 describe-security-group-rules --region "$AWS_REGION" \
       --filters "Name=group-id,Values=${node_sg}" \
       --query "SecurityGroupRules[?IsEgress==\`false\` && IpProtocol==\`tcp\` && FromPort==\`8443\` && ReferencedGroupInfo.GroupId==\`${cluster_sg}\`].SecurityGroupRuleId" \
       --output text | tr '\t' '\n')
@@ -188,7 +194,10 @@ import_efs_mount_targets() {
     return 0
   fi
 
-  mapfile -t mt_ids < <(aws efs describe-mount-targets --region "$AWS_REGION" \
+  local mt_ids=()
+  while IFS= read -r mt; do
+    [[ -n "$mt" ]] && mt_ids+=("$mt")
+  done < <(aws efs describe-mount-targets --region "$AWS_REGION" \
     --file-system-id "$fs_id" \
     --query 'MountTargets[*].MountTargetId' --output text | tr '\t' '\n' | sort)
   if [[ ${#mt_ids[@]} -eq 0 ]]; then
@@ -201,6 +210,20 @@ import_efs_mount_targets() {
   done
 }
 
+import_s3_models_bucket() {
+  local bucket="${NAME_PREFIX}-model-artifacts"
+  if ! aws s3api head-bucket --bucket "$bucket" >/dev/null 2>&1; then
+    echo "S3 bucket ${bucket} not found; apply will create it."
+    return 0
+  fi
+  echo "S3 bucket: ${bucket}"
+  tf_import 'module.s3_models.aws_s3_bucket.model_artifacts' "$bucket"
+  tf_import 'module.s3_models.aws_s3_bucket_versioning.model_artifacts' "$bucket"
+  tf_import 'module.s3_models.aws_s3_bucket_server_side_encryption_configuration.model_artifacts' "$bucket"
+  tf_import 'module.s3_models.aws_s3_bucket_public_access_block.model_artifacts' "$bucket"
+  tf_import 'module.s3_models.aws_s3_bucket_policy.model_artifacts' "$bucket"
+}
+
 run_import() {
   case "$IMPORT_FILTER" in
     all)
@@ -208,6 +231,8 @@ run_import() {
       import_vpc_public_subnets
       echo "=== Import EFS mount targets ==="
       import_efs_mount_targets
+      echo "=== Import S3 model artifacts bucket ==="
+      import_s3_models_bucket
       echo "=== Import KMS alias ==="
       import_kms_alias
       echo "=== Import EKS node SG rules ==="
@@ -217,6 +242,7 @@ run_import() {
     kms) echo "=== Import KMS alias ==="; import_kms_alias ;;
     vpc) echo "=== Import VPC public subnets ==="; import_vpc_public_subnets ;;
     efs) echo "=== Import EFS mount targets ==="; import_efs_mount_targets ;;
+    s3) echo "=== Import S3 model artifacts bucket ==="; import_s3_models_bucket ;;
     *) echo "Unknown --import-only filter: $IMPORT_FILTER"; exit 1 ;;
   esac
 }

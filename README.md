@@ -328,12 +328,14 @@ AUTO_APPROVE=1 make destroy TF_ENVIRONMENT=dev
 
 **GPU cleanup:** destroy deletes NodeClaims/NodePools, force-removes GPU nodes from Kubernetes, and terminates any remaining G5 EC2 instances (EC2 API fallback if Karpenter is stuck).
 
-After destroy, before re-deploying the same environment:
+After destroy (or partial destroy), before re-deploying the same environment:
 
 ```bash
-make import-s3-models TF_ENVIRONMENT=dev   # re-attach existing model bucket to Terraform
+make fix-post-destroy TF_ENVIRONMENT=dev   # import orphaned subnets, EFS, S3 bucket
 make apply TF_ENVIRONMENT=dev
 ```
+
+If `terraform apply` fails with `InvalidSubnet.Conflict`, `MountTargetConflict`, or `BucketAlreadyExists`, run `make fix-post-destroy` then retry apply.
 
 Each command prompts for confirmation by typing the environment name (`dev` or `prod`) unless `AUTO_APPROVE=1` is set.
 

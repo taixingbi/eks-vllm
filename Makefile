@@ -1,4 +1,4 @@
-.PHONY: bootstrap init plan apply patch install-controllers install-addons install-prometheus install-keda install-alb sync-hf-secret build-image upload-model import-s3-models deploy-k8s delete-k8s delete-addons destroy fix-gpu lint lint-terraform load-test-slo force-unlock-terraform fix-terraform-drift
+.PHONY: bootstrap init plan apply patch install-controllers install-addons install-prometheus install-keda install-alb sync-hf-secret build-image upload-model import-s3-models deploy-k8s delete-k8s delete-addons destroy fix-gpu lint lint-terraform load-test-slo force-unlock-terraform fix-terraform-drift fix-post-destroy
 
 TF_ENVIRONMENT ?= prod
 TF_DIR = terraform/environments/$(TF_ENVIRONMENT)
@@ -93,5 +93,10 @@ force-unlock-terraform:
 	LOCK_ID="$(LOCK_ID)" TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/force-unlock-terraform.sh
 
 # Import drifted AWS resources into state (default). Use ARGS="--delete" to force-remove SG rules + KMS alias.
+# After partial destroy, also: make fix-post-destroy TF_ENVIRONMENT=dev
 fix-terraform-drift:
 	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/fix-terraform-drift.sh $(ARGS)
+
+fix-post-destroy:
+	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/fix-terraform-drift.sh
+	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/import-s3-models.sh
