@@ -33,6 +33,7 @@ module "efs" {
   name                       = "${var.name_prefix}-models"
   vpc_id                     = module.vpc.vpc_id
   subnet_ids                 = module.vpc.private_subnet_ids
+  mount_target_count         = var.az_count
   allowed_security_group_ids = [module.eks.node_security_group_id]
 
   tags = var.tags

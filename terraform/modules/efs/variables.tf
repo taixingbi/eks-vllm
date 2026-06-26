@@ -9,8 +9,13 @@ variable "vpc_id" {
 }
 
 variable "subnet_ids" {
-  description = "Subnet IDs for EFS mount targets"
+  description = "Subnet IDs for EFS mount targets (one per AZ)"
   type        = list(string)
+}
+
+variable "mount_target_count" {
+  description = "Number of mount targets; must match length(subnet_ids). Pass az_count so count is known at plan time."
+  type        = number
 }
 
 variable "allowed_security_group_ids" {
