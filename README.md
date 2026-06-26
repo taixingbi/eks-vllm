@@ -53,6 +53,8 @@ scripts/
 
 Run all `make` commands from the **repository root** (`eks-vllm/`), not from `terraform/environments/*`.
 
+See **[docs/deploy_flow.md](docs/deploy_flow.md)** for the full deploy sequence (bootstrap → Terraform → model upload → K8s rollout). See **[docs/destroy.md](docs/destroy.md)** for teardown.
+
 | Command | Description |
 |---|---|
 | `make apply TF_ENVIRONMENT=prod` | Deploy AWS infrastructure |
