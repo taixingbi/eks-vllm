@@ -18,10 +18,9 @@ confirm_action "destroy all infrastructure"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 
 if CLUSTER_NAME=$(configure_kubectl 2>/dev/null); then
-  AUTO_APPROVE=1 "${ROOT}/scripts/delete-k8s.sh"
-  # EC2 fallback if any G5 instances remain before Karpenter is uninstalled.
+  AUTO_APPROVE=1 "${ROOT}/scripts/delete-k8s.sh" || echo "Warning: delete-k8s had errors; continuing destroy"
   terminate_gpu_nodes "${CLUSTER_NAME}" "${AWS_REGION}" 300
-  AUTO_APPROVE=1 "${ROOT}/scripts/delete-addons.sh"
+  AUTO_APPROVE=1 "${ROOT}/scripts/delete-addons.sh" || echo "Warning: delete-addons had errors; continuing to terraform destroy"
 else
   echo "No running cluster for ${TF_ENVIRONMENT}; skipping Kubernetes cleanup."
   # Cluster gone but orphaned G5 instances may remain.

@@ -40,8 +40,14 @@ helm_uninstall aws-efs-csi-driver kube-system
 helm_uninstall karpenter kube-system
 helm_uninstall aws-load-balancer-controller kube-system
 
-kubectl delete namespace monitoring --ignore-not-found --wait=false
-kubectl delete namespace keda --ignore-not-found --wait=false
-kubectl delete namespace external-secrets --ignore-not-found --wait=false
+kubectl_delete_ns() {
+  kubectl delete namespace "$1" --ignore-not-found --wait=false 2>/dev/null || {
+    echo "Warning: could not delete namespace $1 (cluster may be unreachable); continuing"
+  }
+}
+
+kubectl_delete_ns monitoring
+kubectl_delete_ns keda
+kubectl_delete_ns external-secrets
 
 echo "Helm add-ons uninstalled (${TF_ENVIRONMENT})."

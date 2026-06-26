@@ -2,6 +2,16 @@
 # Terminate Karpenter G5 GPU nodes (kubectl + EC2 fallback).
 set -euo pipefail
 
+normalize_count() {
+  local v
+  v=$(printf '%s' "$1" | tr -d '[:space:]')
+  if [[ -z "${v}" ]] || [[ ! "${v}" =~ ^[0-9]+$ ]]; then
+    echo 0
+  else
+    echo "${v}"
+  fi
+}
+
 terminate_gpu_nodes() {
   local cluster_name="${1:?cluster name required}"
   local region="${2:-${AWS_REGION:-us-east-1}}"
@@ -24,14 +34,11 @@ terminate_gpu_nodes() {
   fi
 
   echo "Waiting up to ${max_wait}s for GPU nodes to disappear..."
-  local elapsed=0
+  local elapsed=0 k8s_count ec2_count
   while [[ "${elapsed}" -lt "${max_wait}" ]]; do
-    local k8s_count=0 ec2_count=0
-    if command -v kubectl >/dev/null 2>&1; then
-      k8s_count=$(kubectl get nodes -l workload=gpu --no-headers 2>/dev/null | wc -l | tr -d ' ' || echo 0)
-    fi
-    ec2_count=$(count_g5_ec2_instances "${cluster_name}" "${region}" || echo 0)
-    if [[ "${k8s_count}" == "0" ]] && [[ "${ec2_count}" == "0" ]]; then
+    k8s_count=$(normalize_count "$(kubectl get nodes -l workload=gpu -o name 2>/dev/null | wc -l | awk '{print $1}')")
+    ec2_count=$(normalize_count "$(count_g5_ec2_instances "${cluster_name}" "${region}")")
+    if [[ "${k8s_count}" -eq 0 ]] && [[ "${ec2_count}" -eq 0 ]]; then
       echo "All GPU nodes terminated."
       return 0
     fi
