@@ -84,3 +84,13 @@ module "s3_models" {
 
   tags = var.tags
 }
+
+module "waf" {
+  source = "../../modules/waf"
+
+  name                     = var.name_prefix
+  waf_rate_limit           = var.waf_rate_limit
+  waf_managed_rules_action = var.waf_managed_rules_action
+
+  tags = var.tags
+}

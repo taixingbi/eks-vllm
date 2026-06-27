@@ -1,0 +1,12 @@
+# PodDisruptionBudget for Kong platform gateway (prod HA).
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: vllm-platform-gateway-kong
+  namespace: vllm
+spec:
+  minAvailable: __GATEWAY_PDB_MIN_AVAILABLE__
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kong
+      app.kubernetes.io/instance: vllm-platform-gateway

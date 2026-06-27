@@ -32,6 +32,10 @@ if [[ "${TF_ENVIRONMENT}" != "dev" ]]; then
   kubectl apply -f "${ROOT}/kubernetes/vllm/cluster-secret-store.yaml"
   kubectl apply -f "${TMP_SECRETS}"
 
+  if [[ "${ENABLE_PLATFORM_GATEWAY}" == "1" ]]; then
+    kubectl apply -f "${ROOT}/kubernetes/gateway/external-secret-api-keys.yaml"
+  fi
+
   echo "Waiting for External Secrets (up to 5m)..."
   kubectl wait --for=condition=Ready clustersecretstore/aws-secrets-manager --timeout=300s 2>/dev/null || {
     echo "Warning: ClusterSecretStore not Ready — run: make install-addons TF_ENVIRONMENT=${TF_ENVIRONMENT}"
@@ -39,6 +43,11 @@ if [[ "${TF_ENVIRONMENT}" != "dev" ]]; then
   kubectl wait --for=condition=Ready externalsecret/hf-token -n vllm --timeout=300s 2>/dev/null || {
     echo "Warning: hf-token ExternalSecret not Ready — continuing (HF_TOKEN is optional for public models)"
   }
+  if [[ "${ENABLE_PLATFORM_GATEWAY}" == "1" ]]; then
+    kubectl wait --for=condition=Ready externalsecret/platform-gateway-keys -n vllm --timeout=300s 2>/dev/null || {
+      echo "Warning: platform-gateway-keys ExternalSecret not Ready — create qwen-vllm/api-gateway-keys in Secrets Manager"
+    }
+  fi
 fi
 
 kubectl apply -f "${ROOT}/kubernetes/vllm/namespace.yaml"
@@ -48,11 +57,8 @@ kubectl delete nodeclaims -l karpenter.sh/nodepool=g5-ondemand --ignore-not-foun
 
 kubectl apply -f "${OUT_DIR}/karpenter/ec2nodeclass-g5.yaml"
 kubectl apply -f "${OUT_DIR}/karpenter/nodepool-g5-ondemand.yaml"
-if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
-  kubectl -n vllm scale deployment vllm-qwen --replicas=1 2>/dev/null || true
-  if [[ "${ENABLE_KEDA}" != "1" ]]; then
-    kubectl delete scaledobject vllm-qwen -n vllm --ignore-not-found 2>/dev/null || true
-  fi
+if [[ "${TF_ENVIRONMENT}" == "dev" ]] && [[ "${ENABLE_KEDA}" != "1" ]]; then
+  kubectl delete scaledobject vllm-qwen -n vllm --ignore-not-found 2>/dev/null || true
 fi
 if [[ "${TF_ENVIRONMENT}" != "dev" ]]; then
   kubectl apply -f "${OUT_DIR}/karpenter/nodepool-g5-spot.yaml"
@@ -114,6 +120,26 @@ else
     echo "Skipping gateway router on dev (minimal path)"
     echo "Enable Step 9: DEV_ENABLE_ROUTER=1 make apply-router TF_ENVIRONMENT=dev"
   fi
+fi
+
+if [[ "${ENABLE_PLATFORM_GATEWAY}" == "1" ]]; then
+  if [[ "${TF_ENVIRONMENT}" != "dev" ]]; then
+    KEYS_JSON=$(kubectl get secret platform-gateway-keys -n vllm -o jsonpath='{.data.keys}' 2>/dev/null | base64 -d || true)
+    if [[ -n "${KEYS_JSON}" ]]; then
+      mapfile -t GATEWAY_KEYS < <(python3 -c "import json,sys; d=json.loads(sys.argv[1]); print('\n'.join(d.get('keys',[])))" "${KEYS_JSON}")
+      "${ROOT}/scripts/build-kong-config.sh" "${OUT_DIR}/gateway/kong-dbless-config.yaml" "${GATEWAY_KEYS[@]}"
+    fi
+  fi
+  "${ROOT}/scripts/install-platform-gateway.sh"
+  echo "Waiting for Kong platform gateway..."
+  if ! kubectl rollout status deployment/vllm-platform-gateway-kong -n vllm --timeout=600s; then
+    echo "Kong rollout failed; diagnostics:"
+    kubectl get pods -n vllm -l app.kubernetes.io/instance=vllm-platform-gateway -o wide
+    kubectl logs -n vllm -l app.kubernetes.io/instance=vllm-platform-gateway --tail=80 || true
+    exit 1
+  fi
+elif command -v helm >/dev/null 2>&1; then
+  helm uninstall vllm-platform-gateway -n vllm 2>/dev/null || true
 fi
 
 if [[ "${ENABLE_ALB}" == "1" ]]; then

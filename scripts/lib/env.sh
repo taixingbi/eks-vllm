@@ -118,5 +118,43 @@ fi
 
 export ROUTER_SESSION_KEY="${ROUTER_SESSION_KEY:-X-Session-Id}"
 
+# Platform API gateway (phase 11): prod when ALB on; dev opt-in DEV_ENABLE_PLATFORM_GATEWAY=1.
+if [[ "${ENABLE_ALB}" == "1" ]] && { [[ "${TF_ENVIRONMENT}" == "prod" ]] || [[ "${DEV_ENABLE_PLATFORM_GATEWAY:-}" == "1" ]]; }; then
+  export ENABLE_PLATFORM_GATEWAY=1
+else
+  export ENABLE_PLATFORM_GATEWAY=0
+fi
+
+# AWS WAF on ALB: prod when ALB on; off on dev.
+if [[ "${ENABLE_ALB}" == "1" ]] && [[ "${TF_ENVIRONMENT}" == "prod" ]]; then
+  export ENABLE_WAF=1
+else
+  export ENABLE_WAF=0
+fi
+
+if [[ "${ENABLE_PLATFORM_GATEWAY}" == "1" ]] && [[ "${ENABLE_ROUTER}" != "1" ]]; then
+  echo "ERROR: ENABLE_PLATFORM_GATEWAY requires ENABLE_ROUTER=1 (DEV_ENABLE_ROUTER=1 on dev)."
+  exit 1
+fi
+
+export GATEWAY_RATE_LIMIT_PER_MINUTE="${GATEWAY_RATE_LIMIT_PER_MINUTE:-60}"
+export GATEWAY_MAX_BODY_MB="${GATEWAY_MAX_BODY_MB:-10}"
+
+if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
+  export GATEWAY_REPLICAS=1
+  export GATEWAY_PDB_MIN_AVAILABLE=0
+  export GATEWAY_CPU_REQUEST=250m
+  export GATEWAY_MEMORY_REQUEST=256Mi
+  export GATEWAY_CPU_LIMIT=1
+  export GATEWAY_MEMORY_LIMIT=512Mi
+else
+  export GATEWAY_REPLICAS=2
+  export GATEWAY_PDB_MIN_AVAILABLE=1
+  export GATEWAY_CPU_REQUEST=500m
+  export GATEWAY_MEMORY_REQUEST=512Mi
+  export GATEWAY_CPU_LIMIT=1
+  export GATEWAY_MEMORY_LIMIT=1Gi
+fi
+
 # shellcheck source=scripts/lib/chart-versions.sh
 source "$(dirname "${BASH_SOURCE[0]}")/chart-versions.sh"

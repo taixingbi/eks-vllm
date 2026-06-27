@@ -10,7 +10,7 @@
 |------|------|---------------------|
 | **1** | EKS cluster | Push to `dev` or `make apply TF_ENVIRONMENT=dev` |
 | **2** | GPU nodes | Karpenter NodePool (`g5.2xlarge` default on dev) |
-| **3** | vLLM 7B | `Qwen/Qwen2.5-7B-Instruct` on `g5.2xlarge`, tuned vLLM args, 1 replica |
+| **3** | vLLM 7B | `Qwen/Qwen2.5-7B-Instruct` on `g5.2xlarge`, tuned vLLM args, 2 replicas |
 | **4** | curl succeeds | `kubectl port-forward` → `/v1/models` or `/v1/chat/completions` |
 | **5** | CI smoke test | `deploy.yml` — rollout wait 45m + dev smoke test |
 | **6** | Prometheus | `DEV_ENABLE_PROMETHEUS=1` → `make install-prometheus TF_ENVIRONMENT=dev` |
@@ -40,17 +40,26 @@
 | HTTP (dev) | `DEV_ENABLE_ALB=1` + `DEV_ALB_HTTP_ONLY=1` | Port 80, ALB DNS — no ACM or hostname |
 | HTTPS | `DEV_ENABLE_ALB=1` + secrets `ACM_CERTIFICATE_ARN`, `INFERENCE_HOSTNAME` | Prod-style TLS |
 
-**Security note:** public ALB exposes the raw vLLM API. For prod, prefer internal ClusterIP (Route A) or ALB → **vllm-router** → vLLM (Route B). See [gateway.md](gateway.md).
+**Security note:** public ALB should use the platform gateway (Route B): ALB + WAF → Kong → **vllm-router** → vLLM. See [gateway.md](gateway.md).
 
-### Step 9 — Gateway router (phases 0–9)
+### Step 9 — Session router (phases 0–9)
 
 | Mode | Flags | Routing |
 |------|-------|---------|
 | Dev session router | `DEV_ENABLE_ROUTER=1` | `session` |
-| Dev full gateway | `DEV_ENABLE_ROUTER=1` + `DEV_ENABLE_LMCACHE=1` | `kvaware` |
+| Dev router + LMCache | `DEV_ENABLE_ROUTER=1` + `DEV_ENABLE_LMCACHE=1` | `kvaware` |
 | Prod | always on | `kvaware` + LMCache |
 
 Client header: `X-Session-Id` per conversation. Full phase map: [gateway.md](gateway.md).
+
+### Step 11 — Platform gateway (Kong + WAF)
+
+| Mode | Flags |
+|------|-------|
+| Dev | `DEV_ENABLE_ALB=1` + `DEV_ENABLE_ROUTER=1` + `DEV_ENABLE_PLATFORM_GATEWAY=1` |
+| Prod | on automatically when ALB enabled |
+
+`make install-platform-gateway` installs Kong. Prod also provisions AWS WAF (managed rules in **count** mode initially).
 
 ### Recovery
 

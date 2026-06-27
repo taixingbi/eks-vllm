@@ -64,6 +64,18 @@ variable "system_node_max_size" {
   default     = 4
 }
 
+variable "waf_rate_limit" {
+  description = "WAF rate-based rule limit (requests per 5 minutes per IP)"
+  type        = number
+  default     = 2000
+}
+
+variable "waf_managed_rules_action" {
+  description = "AWS managed WAF rules action: count (observe) or block"
+  type        = string
+  default     = "count"
+}
+
 variable "tags" {
   description = "Default tags"
   type        = map(string)

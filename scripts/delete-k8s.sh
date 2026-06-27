@@ -24,6 +24,9 @@ fi
 echo "Deleting Kubernetes workloads from ${CLUSTER_NAME}..."
 
 echo "Deleting vLLM resources..."
+if command -v helm >/dev/null 2>&1; then
+  helm uninstall vllm-platform-gateway -n vllm 2>/dev/null || true
+fi
 kubectl_delete_crd_kind scaledobjects.keda.sh scaledobject --all -n vllm
 kubectl_delete ingress --all -n vllm
 kubectl_delete deployment --all -n vllm

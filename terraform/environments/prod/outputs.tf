@@ -94,6 +94,11 @@ output "vllm_model_s3_role_arn" {
   value       = module.s3_models.vllm_s3_role_arn
 }
 
+output "waf_web_acl_arn" {
+  description = "Regional WAF Web ACL ARN (attach to public ALB ingress)"
+  value       = module.waf.web_acl_arn
+}
+
 output "configure_kubectl" {
   description = "Command to configure kubectl"
   value       = "aws eks update-kubeconfig --region ${var.aws_region} --name ${module.eks.cluster_name}"

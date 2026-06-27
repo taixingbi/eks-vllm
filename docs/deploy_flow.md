@@ -183,6 +183,7 @@ make install-keda TF_ENVIRONMENT=dev       # Step 7 (also installs Prometheus)
 make install-alb TF_ENVIRONMENT=dev        # Step 8 (DEV_ALB_HTTP_ONLY=1 for HTTP)
 make install-router TF_ENVIRONMENT=dev     # Step 9 (DEV_ENABLE_ROUTER=1)
 make install-gateway TF_ENVIRONMENT=dev    # Step 9 + LMCache (DEV_ENABLE_LMCACHE=1)
+make install-platform-gateway TF_ENVIRONMENT=dev  # Step 11 (DEV_ENABLE_PLATFORM_GATEWAY=1)
 ```
 
 ---
@@ -221,8 +222,9 @@ make deploy-k8s TF_ENVIRONMENT=dev
 7. **model-seed Job** — sync S3 → EFS on a system node (waits up to 60m)
 8. **vLLM Deployment** + Service (+ LMCache ConfigMap when `ENABLE_LMCACHE=1`)
 9. **Gateway router** — if `ENABLE_ROUTER=1` (prod always; dev `DEV_ENABLE_ROUTER=1`)
-10. **Ingress** — if `DEV_ENABLE_ALB=1` or prod (backend: `vllm-router` when router on)
-11. **Monitoring / KEDA** — if respective flags set (includes router ServiceMonitor when router + Prometheus)
+10. **Platform gateway (Kong)** — if `ENABLE_PLATFORM_GATEWAY=1` (prod with ALB; dev `DEV_ENABLE_PLATFORM_GATEWAY=1`)
+11. **Ingress** — if ALB enabled (backend: `vllm-platform-gateway-kong-proxy` → `vllm-router` → vLLM)
+12. **Monitoring / KEDA** — if respective flags set
 
 ### Model path at runtime
 

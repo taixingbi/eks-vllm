@@ -10,6 +10,7 @@ export AWS_EFS_CSI_CHART_VERSION="${AWS_EFS_CSI_CHART_VERSION:-3.1.7}"
 export KUBE_PROMETHEUS_STACK_CHART_VERSION="${KUBE_PROMETHEUS_STACK_CHART_VERSION:-86.2.3}"
 export KEDA_CHART_VERSION="${KEDA_CHART_VERSION:-2.16.1}"
 export EXTERNAL_SECRETS_CHART_VERSION="${EXTERNAL_SECRETS_CHART_VERSION:-2.6.0}"
+export KONG_CHART_VERSION="${KONG_CHART_VERSION:-2.46.0}"
 
 # Not Helm — pinned manifest image (kubernetes/gpu/nvidia-device-plugin.yaml)
 export NVIDIA_DEVICE_PLUGIN_VERSION="${NVIDIA_DEVICE_PLUGIN_VERSION:-0.14.5}"
@@ -27,6 +28,7 @@ Pinned add-on versions (${TF_ENVIRONMENT:-unknown}):
   kube-prometheus-stack chart:  ${KUBE_PROMETHEUS_STACK_CHART_VERSION}
   KEDA chart:                   ${KEDA_CHART_VERSION}
   External Secrets chart:       ${EXTERNAL_SECRETS_CHART_VERSION}
+  Kong chart:                   ${KONG_CHART_VERSION}
   NVIDIA device plugin:         v${NVIDIA_DEVICE_PLUGIN_VERSION}
   vLLM router image:            ${VLLM_ROUTER_REPOSITORY}:${VLLM_ROUTER_TAG}
 EOF

@@ -30,8 +30,8 @@ dev_model_is_large() {
 }
 
 if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
-  VLLM_REPLICAS=1
-  KEDA_MIN_REPLICAS=1
+  VLLM_REPLICAS=2
+  KEDA_MIN_REPLICAS=2
   KEDA_WAITING_THRESHOLD=2
   KEDA_GPU_CACHE_THRESHOLD=0.80
   KEDA_TTFT_P95_THRESHOLD=2
@@ -44,7 +44,7 @@ if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
   NODEPOOL_CONSOLIDATE_AFTER=720h
   ROLLING_MAX_SURGE=0
   ROLLING_MAX_UNAVAILABLE=1
-  PDB_MIN_AVAILABLE=0
+  PDB_MIN_AVAILABLE=1
   PRESTOP_SLEEP_SECONDS=15
   TERMINATION_GRACE_SECONDS=120
   ROUTER_REPLICAS=1
@@ -107,10 +107,19 @@ else
   LMCACHE_LOG_LEVEL=WARNING
 fi
 
-if [[ "${ENABLE_ROUTER}" == "1" ]]; then
+if [[ "${ENABLE_PLATFORM_GATEWAY}" == "1" ]]; then
+  INGRESS_BACKEND_SERVICE=vllm-platform-gateway-kong-proxy
+elif [[ "${ENABLE_ROUTER}" == "1" ]]; then
   INGRESS_BACKEND_SERVICE=vllm-router
 else
   INGRESS_BACKEND_SERVICE=vllm-qwen
+fi
+
+if [[ "${ENABLE_WAF}" == "1" ]]; then
+  WAF_WEB_ACL_ARN=$(terraform output -raw waf_web_acl_arn)
+  WAF_INGRESS_ANNOTATIONS="    alb.ingress.kubernetes.io/wafv2-acl-arn: ${WAF_WEB_ACL_ARN}"
+else
+  WAF_INGRESS_ANNOTATIONS=""
 fi
 
 if [[ "${ENABLE_LMCACHE}" == "1" ]]; then
@@ -141,7 +150,7 @@ INSTANCE_FAMILY="${INSTANCE_TYPE%%.*}"
 INSTANCE_SIZE="${INSTANCE_TYPE#*.}"
 KARPENTER_INSTANCE_SIZES="\"${INSTANCE_SIZE}\""
 
-mkdir -p "${OUT_DIR}/karpenter" "${OUT_DIR}/vllm" "${OUT_DIR}/monitoring"
+mkdir -p "${OUT_DIR}/karpenter" "${OUT_DIR}/vllm" "${OUT_DIR}/monitoring" "${OUT_DIR}/gateway"
 
 patch_file() {
   local src=$1
@@ -209,6 +218,16 @@ patch_ingress() {
     -e "s|ACM_CERTIFICATE_ARN|${ACM_CERTIFICATE_ARN}|g" \
     -e "s|inference.example.com|${INFERENCE_HOSTNAME}|g" \
     -e "s|__INGRESS_BACKEND_SERVICE__|${INGRESS_BACKEND_SERVICE}|g" \
+    -e "s|__WAF_INGRESS_ANNOTATIONS__|${WAF_INGRESS_ANNOTATIONS}|g" \
+    "$src" > "$dst"
+}
+
+patch_ingress_http() {
+  local src=$1
+  local dst=$2
+  sed \
+    -e "s|__INGRESS_BACKEND_SERVICE__|${INGRESS_BACKEND_SERVICE}|g" \
+    -e "s|__WAF_INGRESS_ANNOTATIONS__|${WAF_INGRESS_ANNOTATIONS}|g" \
     "$src" > "$dst"
 }
 
@@ -289,14 +308,21 @@ apply_router_multiline_args
 patch_file "${ROOT}/kubernetes/vllm/configmap.yaml" "${OUT_DIR}/vllm/configmap.yaml"
 patch_file "${ROOT}/kubernetes/vllm/model-seed-job.yaml" "${OUT_DIR}/vllm/model-seed-job.yaml"
 patch_ingress "${ROOT}/kubernetes/vllm/ingress.yaml" "${OUT_DIR}/vllm/ingress.yaml"
+patch_ingress_http "${ROOT}/kubernetes/vllm/ingress-http.yaml" "${OUT_DIR}/vllm/ingress-http.yaml"
 patch_file "${ROOT}/kubernetes/vllm/keda-scaledobject.yaml" "${OUT_DIR}/vllm/keda-scaledobject.yaml"
 patch_file "${ROOT}/kubernetes/monitoring/cloudwatch-agent.yaml" "${OUT_DIR}/monitoring/cloudwatch-agent.yaml"
+
+if [[ "${ENABLE_PLATFORM_GATEWAY}" == "1" ]]; then
+  "${ROOT}/scripts/build-kong-config.sh" "${OUT_DIR}/gateway/kong-dbless-config.yaml"
+  sed \
+    -e "s|__GATEWAY_PDB_MIN_AVAILABLE__|${GATEWAY_PDB_MIN_AVAILABLE}|g" \
+    "${ROOT}/kubernetes/gateway/kong-pdb.yaml" > "${OUT_DIR}/gateway/kong-pdb.yaml"
+fi
 
 cp "${ROOT}/kubernetes/vllm/namespace.yaml" "${OUT_DIR}/vllm/"
 cp "${ROOT}/kubernetes/vllm/router-rbac.yaml" "${OUT_DIR}/vllm/"
 cp "${ROOT}/kubernetes/vllm/lmcache-config.yaml" "${OUT_DIR}/vllm/"
 cp "${ROOT}/kubernetes/vllm/service.yaml" "${OUT_DIR}/vllm/"
-patch_file "${ROOT}/kubernetes/vllm/ingress-http.yaml" "${OUT_DIR}/vllm/ingress-http.yaml"
 patch_file "${ROOT}/kubernetes/gpu/nvidia-device-plugin.yaml" "${OUT_DIR}/nvidia-device-plugin.yaml"
 cp "${ROOT}/kubernetes/monitoring/namespace.yaml" "${OUT_DIR}/monitoring/"
 cp "${ROOT}/kubernetes/monitoring/servicemonitor.yaml" "${OUT_DIR}/monitoring/"
@@ -322,3 +348,5 @@ echo "  ENABLE_ROUTER=${ENABLE_ROUTER}"
 echo "  ROUTER_ROUTING_LOGIC=${ROUTER_ROUTING_LOGIC}"
 echo "  ENABLE_LMCACHE=${ENABLE_LMCACHE}"
 echo "  INGRESS_BACKEND=${INGRESS_BACKEND_SERVICE}"
+echo "  ENABLE_PLATFORM_GATEWAY=${ENABLE_PLATFORM_GATEWAY}"
+echo "  ENABLE_WAF=${ENABLE_WAF}"

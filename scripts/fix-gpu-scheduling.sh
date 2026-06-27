@@ -23,7 +23,7 @@ kubectl apply -f "${OUT_DIR}/karpenter/nodepool-g5-ondemand.yaml"
 kubectl apply -f "${OUT_DIR}/vllm/deployment.yaml"
 # Allow voluntary disruption during recovery; restored from manifest after rollout.
 kubectl -n vllm patch pdb vllm-qwen -p '{"spec":{"minAvailable":0}}' --type=merge 2>/dev/null || true
-kubectl -n vllm scale deployment vllm-qwen --replicas=1 2>/dev/null || true
+kubectl -n vllm scale deployment vllm-qwen --replicas=2 2>/dev/null || true
 kubectl -n vllm delete rs -l app=vllm-qwen --field-selector='status.replicas=0' --ignore-not-found 2>/dev/null || true
 kubectl delete pod -n vllm --field-selector=status.phase=Failed --ignore-not-found 2>/dev/null || true
 

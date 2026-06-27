@@ -1,4 +1,4 @@
-.PHONY: bootstrap init plan apply patch install-controllers install-addons install-prometheus install-keda install-alb install-router install-gateway sync-hf-secret build-image upload-model import-s3-models deploy-k8s delete-k8s delete-addons destroy fix-gpu lint lint-terraform load-test-slo force-unlock-terraform fix-terraform-drift fix-post-destroy
+.PHONY: bootstrap init plan apply patch install-controllers install-addons install-prometheus install-keda install-alb install-router install-gateway install-platform-gateway sync-hf-secret build-image upload-model import-s3-models deploy-k8s delete-k8s delete-addons destroy fix-gpu lint lint-terraform load-test-slo force-unlock-terraform fix-terraform-drift fix-post-destroy
 
 TF_ENVIRONMENT ?= prod
 TF_DIR = terraform/environments/$(TF_ENVIRONMENT)
@@ -53,6 +53,15 @@ install-router:
 # Step 9 with LMCache (phase 9 cross-pod KV).
 install-gateway:
 	DEV_ENABLE_ROUTER=1 DEV_ENABLE_LMCACHE=1 TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/apply-router.sh
+
+# Step 11: Kong platform API gateway (+ WAF on prod ALB). Requires router + ALB.
+install-platform-gateway:
+	DEV_ENABLE_ROUTER=1 DEV_ENABLE_ALB=1 DEV_ENABLE_PLATFORM_GATEWAY=1 TF_ENVIRONMENT=$(TF_ENVIRONMENT) \
+	  DEV_ALB_HTTP_ONLY="$(DEV_ALB_HTTP_ONLY)" \
+	  PLATFORM_GATEWAY_API_KEY="$(PLATFORM_GATEWAY_API_KEY)" \
+	  ACM_CERTIFICATE_ARN="$(ACM_CERTIFICATE_ARN)" \
+	  INFERENCE_HOSTNAME="$(INFERENCE_HOSTNAME)" \
+	  ./scripts/apply-platform-gateway.sh
 
 sync-hf-secret:
 	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/sync-hf-secret.sh

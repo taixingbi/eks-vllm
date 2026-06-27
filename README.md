@@ -66,6 +66,7 @@ See **[docs/deploy_flow.md](docs/deploy_flow.md)** for the full deploy sequence 
 | `make install-alb TF_ENVIRONMENT=dev` | Step 8: ALB Controller + Ingress (HTTP: `DEV_ALB_HTTP_ONLY=1`; HTTPS: ACM cert + hostname) |
 | `make install-router TF_ENVIRONMENT=dev` | Step 9: session/KV-aware router (requires `DEV_ENABLE_ROUTER=1`; use with KEDA for multi-replica) |
 | `make install-gateway TF_ENVIRONMENT=dev` | Step 9 + LMCache (phases 1–9): `DEV_ENABLE_ROUTER=1` + `DEV_ENABLE_LMCACHE=1` |
+| `make install-platform-gateway TF_ENVIRONMENT=dev` | Step 11: Kong API gateway (requires `DEV_ENABLE_ALB=1` + `DEV_ENABLE_ROUTER=1` + `DEV_ENABLE_PLATFORM_GATEWAY=1`) |
 | `AUTO_APPROVE=1 make delete-k8s TF_ENVIRONMENT=prod` | Remove K8s workloads (keeps cluster) |
 | `AUTO_APPROVE=1 make destroy TF_ENVIRONMENT=prod` | Delete everything for an environment |
 
@@ -109,6 +110,7 @@ Create GitHub **Environments** named `dev` and `prod` (Settings → Environments
 | `DEV_ALB_HTTP_ONLY` | *(unset)* | Set to `1` on **dev** for HTTP-only ALB on port 80 (no ACM / hostname; use ALB DNS) |
 | `DEV_ENABLE_ROUTER` | *(unset)* | Set to `1` on **dev** to enable Step 9 (session/KV-aware router; prod always on) |
 | `DEV_ENABLE_LMCACHE` | *(unset)* | Set to `1` on **dev** for LMCache cross-pod KV (phase 9; prod default when router on) |
+| `DEV_ENABLE_PLATFORM_GATEWAY` | *(unset)* | Set to `1` on **dev** for Step 11 Kong platform gateway (requires `DEV_ENABLE_ALB=1` + `DEV_ENABLE_ROUTER=1`; prod on with ALB) |
 | `ROUTER_ROUTING_LOGIC` | *(auto)* | Override: `session`, `prefixaware`, or `kvaware` (see [docs/gateway.md](docs/gateway.md)) |
 
 Dev uses 1 Karpenter replica (single system node); prod uses 2.
@@ -127,6 +129,7 @@ Optional **Helm chart overrides** (unset = defaults in `scripts/lib/chart-versio
 | `KUBE_PROMETHEUS_STACK_CHART_VERSION` | `86.2.3` | kube-prometheus-stack |
 | `KEDA_CHART_VERSION` | `2.16.1` | KEDA |
 | `EXTERNAL_SECRETS_CHART_VERSION` | `2.6.0` | External Secrets Operator |
+| `KONG_CHART_VERSION` | `2.46.0` | Kong Gateway (phase 11) |
 | `NVIDIA_DEVICE_PLUGIN_VERSION` | `0.14.5` | NVIDIA device plugin (manifest, not Helm) |
 | `VLLM_ROUTER_TAG` | `v0.1.11` | vLLM Production Stack router image tag |
 
@@ -138,6 +141,7 @@ Bump versions in **`scripts/lib/chart-versions.sh`** (single source of truth), t
 |---|---|
 | `ACM_CERTIFICATE_ARN` | ACM cert ARN for HTTPS ingress (not needed when `DEV_ALB_HTTP_ONLY=1`) |
 | `INFERENCE_HOSTNAME` | Public hostname for HTTPS (e.g. `dev.inference.example.com`; not needed for HTTP-only) |
+| `PLATFORM_GATEWAY_API_KEY` | Dev Kong API key for smoke tests / local deploy (prod uses Secrets Manager) |
 
 HF tokens are stored per environment:
 - **prod:** `qwen-vllm/hf-token`
@@ -336,7 +340,38 @@ curl -H "X-Session-Id: user-123" http://127.0.0.1:8000/v1/chat/completions ...
 
 Port-forward the router (when enabled): `kubectl port-forward -n vllm svc/vllm-router 8000:8000`
 
+### Dev Step 11 — Platform gateway (optional)
+
+Kong API gateway + AWS WAF on prod ALB. See **[docs/gateway.md](docs/gateway.md)** phase 11.
+
+| Mode | Flags |
+|------|-------|
+| Dev Kong gateway | `DEV_ENABLE_ALB=1` + `DEV_ENABLE_ROUTER=1` + `DEV_ENABLE_PLATFORM_GATEWAY=1` |
+| Prod (default with ALB) | Kong + WAF automatically enabled |
+
+**Note:** `make install-gateway` = router + LMCache (phases 1–9). `make install-platform-gateway` = Kong (phase 11).
+
+```bash
+DEV_ENABLE_ALB=1 DEV_ALB_HTTP_ONLY=1 DEV_ENABLE_ROUTER=1 DEV_ENABLE_PLATFORM_GATEWAY=1 \
+  PLATFORM_GATEWAY_API_KEY=test-key make install-platform-gateway TF_ENVIRONMENT=dev
+```
+
+Client headers when platform gateway is on:
+
+```bash
+curl -H "X-API-Key: test-key" -H "X-Session-Id: user-123" \
+  http://<alb-dns>/v1/chat/completions ...
+```
+
 Verify:
+
+```bash
+kubectl get deploy,svc -n vllm -l app.kubernetes.io/instance=vllm-platform-gateway
+curl -s -o /dev/null -w "%{http_code}" http://<alb>/health   # 200
+curl -s -o /dev/null -w "%{http_code}" http://<alb>/ready    # 200 when stack ready
+```
+
+Verify router (step 9):
 
 ```bash
 kubectl get deploy,svc,pdb -n vllm -l app=vllm-router
@@ -404,7 +439,7 @@ If an environment was **never deployed**, delete/destroy exits cleanly after rep
 | VPC CIDR | `10.1.0.0/16` | `10.0.0.0/16` |
 | NAT gateways | 1 (single) | 2 (HA) |
 | System nodes | 1× `m6i.xlarge` (80 GiB root) | 2× `m6i.xlarge` (80 GiB root) |
-| vLLM replicas | 1 | 2 |
+| vLLM replicas | 2 | 2 |
 | GPU instance (default) | `g5.2xlarge` (8 vCPU quota) | `g5.4xlarge` |
 | HF secret | `qwen-vllm-dev/hf-token` | `qwen-vllm/hf-token` |
 | Terraform state key | `dev/terraform.tfstate` | `prod/terraform.tfstate` |
@@ -549,7 +584,7 @@ Placeholders replaced by `patch-manifests.sh`:
 - `CLUSTER_NAME`, `KARPENTER_NODE_ROLE_NAME`, `INSTANCE_PROFILE`
 - `FILE_SYSTEM_ID`, `ACCESS_POINT_ID`, `ECR_REPOSITORY_URL`
 - `ACM_CERTIFICATE_ARN`, `CLOUDWATCH_AGENT_ROLE_ARN`, `INFERENCE_HOSTNAME`
-- `__MODEL_ID_VALUE__`, `__MODEL_PATH_VALUE__`, `__MODEL_VERSION_VALUE__`, `__MODEL_S3_BUCKET__`, `__VLLM_MODEL_S3_ROLE_ARN__`, `__VLLM_REPLICAS__`, `INSTANCE_FAMILY`, `INSTANCE_SIZE` (from `MODEL_NAME`, `MODEL_VERSION`, `INSTANCE_TYPE`; dev uses 1 vLLM replica, prod uses 2)
+- `__MODEL_ID_VALUE__`, `__MODEL_PATH_VALUE__`, `__MODEL_VERSION_VALUE__`, `__MODEL_S3_BUCKET__`, `__VLLM_MODEL_S3_ROLE_ARN__`, `__VLLM_REPLICAS__`, `INSTANCE_FAMILY`, `INSTANCE_SIZE` (from `MODEL_NAME`, `MODEL_VERSION`, `INSTANCE_TYPE`; dev and prod default 2 vLLM replicas)
 
 </details>
 

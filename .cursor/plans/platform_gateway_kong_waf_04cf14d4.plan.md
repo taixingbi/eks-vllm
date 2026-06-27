@@ -4,25 +4,25 @@ overview: "Implement phase 11: Client → ALB+WAF → Kong platform gateway → 
 todos:
   - id: terraform-waf
     content: Add terraform/modules/waf (managed rules in count mode by default), wire prod main.tf + waf_web_acl_arn output
-    status: pending
+    status: completed
   - id: kong-helm
     content: Add KONG_CHART_VERSION, install-platform-gateway.sh, kong dbless config template with /health vs /ready split
-    status: pending
+    status: completed
   - id: env-flags
     content: Add ENABLE_PLATFORM_GATEWAY, ENABLE_WAF, gateway tunables to env.sh; enforce router dependency
-    status: pending
+    status: completed
   - id: patch-deploy
     content: Update patch-manifests.sh (ingress backend, WAF annotation, Kong config, 300s timeouts) + deploy-k8s.sh order
-    status: pending
+    status: completed
   - id: api-keys
     content: Add ExternalSecret (prod) + PLATFORM_GATEWAY_API_KEY patching (dev); support X-API-Key and Bearer
-    status: pending
+    status: completed
   - id: ci-makefile
     content: Makefile install-platform-gateway, deploy.yml waits + smoke test with API key, delete-k8s cleanup
-    status: pending
+    status: completed
   - id: docs
     content: Update gateway.md phase 11, design.md, README client contract + flags + rate-limit caveat
-    status: pending
+    status: completed
 isProject: false
 ---
 

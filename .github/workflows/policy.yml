@@ -41,6 +41,7 @@ jobs:
             terraform/modules/efs
             terraform/modules/eks
             terraform/modules/external-secrets
+            terraform/modules/waf
             terraform/modules/karpenter
             terraform/modules/vpc
             terraform/environments/dev

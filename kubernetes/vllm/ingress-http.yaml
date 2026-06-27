@@ -15,6 +15,7 @@ metadata:
     alb.ingress.kubernetes.io/healthy-threshold-count: "2"
     alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
     alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=300
+__WAF_INGRESS_ANNOTATIONS__
     alb.ingress.kubernetes.io/tags: Project=qwen-vllm,Component=vllm-ingress
 spec:
   ingressClassName: alb

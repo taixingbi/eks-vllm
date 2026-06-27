@@ -1,0 +1,68 @@
+# Kong Gateway declarative config (DB-less). Patched by scripts/build-kong-config.sh.
+# Placeholders: __GATEWAY_RATE_LIMIT_PER_MINUTE__, __GATEWAY_MAX_BODY_MB__, __KONG_CONSUMERS_BLOCK__
+_format_version: "3.0"
+_transform: true
+
+services:
+  - name: vllm-router-upstream
+    url: http://vllm-router.vllm.svc.cluster.local:8000
+    connect_timeout: 10000
+    read_timeout: 300000
+    write_timeout: 300000
+    routes:
+      - name: ready
+        paths:
+          - /ready
+        methods:
+          - GET
+        strip_path: false
+        plugins:
+          - name: request-transformer
+            config:
+              replace:
+                uri: /health
+      - name: openai-api
+        paths:
+          - /v1
+        strip_path: false
+        plugins:
+          - name: pre-function
+            config:
+              access:
+                - |
+                  local auth = kong.request.get_header("Authorization")
+                  if auth and auth:sub(1, 7) == "Bearer " then
+                    local token = auth:sub(8)
+                    kong.service.request.set_header("apikey", token)
+                    kong.service.request.set_header("X-API-Key", token)
+                  end
+          - name: key-auth
+            config:
+              key_names:
+                - apikey
+                - X-API-Key
+              hide_credentials: false
+          - name: rate-limiting
+            config:
+              minute: __GATEWAY_RATE_LIMIT_PER_MINUTE__
+              policy: local
+              limit_by: consumer
+          - name: request-size-limiting
+            config:
+              allowed_payload_size: __GATEWAY_MAX_BODY_MB__
+
+  - name: kong-health
+    url: http://127.0.0.1:1
+    routes:
+      - name: health
+        paths:
+          - /health
+        methods:
+          - GET
+        plugins:
+          - name: request-termination
+            config:
+              status_code: 200
+              message: "ok"
+
+__KONG_CONSUMERS_BLOCK__

@@ -17,10 +17,12 @@ Multi-replica routing for vLLM on EKS. Phases **0–9** are implemented in this 
 | **8** | Prefix/KV-aware | Implemented (prod) | prod default `ROUTER_ROUTING_LOGIC=prefixaware` |
 | **9** | LMCache | Implemented (opt-in) | prod default; dev `DEV_ENABLE_LMCACHE=1` |
 | **10** | Multi-model | Future | — |
-| **11** | Auth / rate limit | Future | AWS WAF, API keys |
+| **11** | Platform gateway | Implemented | Kong + AWS WAF (prod); `DEV_ENABLE_PLATFORM_GATEWAY=1` |
 | **12** | Cost / SLA routing | Future | Tenant priority |
 
-## Architecture (phases 1–9 enabled)
+## Architecture
+
+### Phases 1–9 (router only)
 
 ```text
 Client  →  ALB  →  vllm-router  →  vllm-qwen pods (KEDA-scaled)
@@ -29,7 +31,24 @@ Client  →  ALB  →  vllm-router  →  vllm-qwen pods (KEDA-scaled)
               Optional LMCache controller port (phase 9)
 ```
 
-Direct debug path (bypass router): `kubectl port-forward -n vllm svc/vllm-qwen 8000:8000`
+### Phase 11 (platform gateway + WAF)
+
+WAF is **attached to the ALB**, not a separate hop.
+
+```text
+Client  →  ALB + AWS WAF  →  Kong  →  vllm-router  →  vllm-qwen pods
+```
+
+| Layer | Role |
+|-------|------|
+| **ALB + AWS WAF** | Public edge — TLS, idle timeout 300s, IP rate limits, managed rules (prod: count mode initially) |
+| **Kong** | Platform API gateway — API keys, rate limit, body size, proxy timeouts |
+| **vllm-router** | Session / GPU routing |
+| **vLLM pods** | Model serving |
+
+Direct debug path (bypass Kong): `kubectl port-forward -n vllm svc/vllm-router 8000:8000`
+
+**Naming:** `make install-gateway` = router + LMCache (phases 1–9). `make install-platform-gateway` = Kong (phase 11).
 
 ## Enable flags
 
@@ -39,6 +58,17 @@ Direct debug path (bypass router): `kubectl port-forward -n vllm svc/vllm-qwen 8
 | **dev** (default) | off | off | — |
 | **dev** | `DEV_ENABLE_ROUTER=1` | off | `session` |
 | **dev** | `DEV_ENABLE_ROUTER=1` + `DEV_ENABLE_LMCACHE=1` | on | `kvaware` |
+
+### Phase 11 — Platform gateway
+
+| Environment | Platform gateway | WAF | Requires |
+|-------------|------------------|-----|----------|
+| **prod** | on (with ALB) | on | router always on |
+| **dev** | `DEV_ENABLE_PLATFORM_GATEWAY=1` | off | `DEV_ENABLE_ALB=1` + `DEV_ENABLE_ROUTER=1` |
+
+Override tunables: `GATEWAY_RATE_LIMIT_PER_MINUTE` (default 60), `GATEWAY_MAX_BODY_MB` (default 10).
+
+**Rate limit caveat:** Kong `local` policy is **per Kong pod**. With 2 replicas and limit 60/min, effective ceiling ≈ 120/min. Use Redis-backed policy for global limits (future).
 
 Override routing: `ROUTER_ROUTING_LOGIC=prefixaware|session|kvaware`
 
@@ -53,11 +83,17 @@ DEV_ENABLE_ROUTER=1 make install-router TF_ENVIRONMENT=dev
 # Phases 1–9 (session + LMCache + kvaware)
 DEV_ENABLE_ROUTER=1 DEV_ENABLE_LMCACHE=1 make install-gateway TF_ENVIRONMENT=dev
 
-# Full deploy with gateway (prod includes router + LMCache automatically)
+# Phase 11 — Kong platform gateway (requires ALB + router on dev)
+DEV_ENABLE_ALB=1 DEV_ALB_HTTP_ONLY=1 DEV_ENABLE_ROUTER=1 DEV_ENABLE_PLATFORM_GATEWAY=1 \
+  PLATFORM_GATEWAY_API_KEY=test-key make install-platform-gateway TF_ENVIRONMENT=dev
+
+# Full deploy with gateway (prod includes router + LMCache + Kong + WAF automatically)
 make deploy-k8s TF_ENVIRONMENT=prod
 ```
 
-## Client contract (phase 7)
+## Client contract (phase 7 + 11)
+
+### Session routing (phase 7)
 
 Send a **stable session id** per conversation or user:
 
@@ -65,6 +101,31 @@ Send a **stable session id** per conversation or user:
 X-Session-Id: user-abc-123
 Content-Type: application/json
 ```
+
+### API authentication (phase 11)
+
+When platform gateway is enabled, `/v1/*` requires an API key:
+
+```http
+X-API-Key: <your-key>
+# OR
+Authorization: Bearer <your-key>
+
+X-Session-Id: user-abc-123
+Content-Type: application/json
+```
+
+| Route | Auth | Purpose |
+|-------|------|---------|
+| `GET /health` | none | Kong liveness (ALB health check target) |
+| `GET /ready` | none | Full stack readiness (proxies to router `/health`) |
+| `/v1/*` | API key | OpenAI-compatible API |
+
+Prod keys: AWS Secrets Manager `qwen-vllm/api-gateway-keys` as `{"keys":["key1","key2"]}`.
+
+Dev: set `PLATFORM_GATEWAY_API_KEY` at deploy time (placeholder `dev-change-me` if unset).
+
+### Session headers (phase 7)
 
 | Header | Required | Behavior |
 |--------|----------|----------|
@@ -138,8 +199,12 @@ Use with `DEV_ENABLE_KEDA=1`. Router discovers new pods automatically when KEDA 
 | `kubernetes/vllm/router-rbac.yaml` | Pod discovery RBAC |
 | `kubernetes/vllm/lmcache-config.yaml` | LMCache config (phase 9) |
 | `kubernetes/monitoring/servicemonitor-router.yaml` | Prometheus scrape |
-| `scripts/apply-router.sh` | Incremental gateway apply |
-| `scripts/lib/env.sh` | `ENABLE_ROUTER`, `ENABLE_LMCACHE`, routing logic |
+| `scripts/apply-router.sh` | Incremental router apply |
+| `kubernetes/gateway/kong-dbless-config.yaml.template` | Kong declarative config template |
+| `scripts/install-platform-gateway.sh` | Kong Helm install |
+| `scripts/apply-platform-gateway.sh` | Incremental platform gateway apply |
+| `scripts/build-kong-config.sh` | Patch Kong config with API keys |
+| `scripts/lib/env.sh` | `ENABLE_ROUTER`, `ENABLE_LMCACHE`, `ENABLE_PLATFORM_GATEWAY`, `ENABLE_WAF` |
 
 ## Troubleshooting
 
@@ -182,10 +247,8 @@ kubectl logs -n vllm deploy/vllm-router --tail=80
 kubectl describe pod -n vllm -l app=vllm-router
 ```
 
-## Future phases (10–12)
+## Future phases (12)
 
-- **10 Multi-model:** multiple Deployments + router model aliases
-- **11 Auth:** ALB WAF, `VLLM_API_KEY`, rate limits
 - **12 Cost/SLA:** tenant headers, priority queues, SLO-based routing
 
-See [`docs/design.md`](design.md) Route B: ALB → gateway → vLLM.
+See [`docs/design.md`](design.md) Route B: ALB + WAF → Kong → router → vLLM.

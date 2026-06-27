@@ -18,6 +18,7 @@ terraform_roots=(
   terraform/modules/external-secrets
   terraform/modules/karpenter
   terraform/modules/vpc
+  terraform/modules/waf
   terraform/environments/dev
   terraform/environments/prod
 )
