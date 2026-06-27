@@ -1,4 +1,4 @@
-.PHONY: bootstrap init plan apply patch install-controllers install-addons install-prometheus install-keda install-alb sync-hf-secret build-image upload-model import-s3-models deploy-k8s delete-k8s delete-addons destroy fix-gpu lint lint-terraform load-test-slo force-unlock-terraform fix-terraform-drift fix-post-destroy
+.PHONY: bootstrap init plan apply patch install-controllers install-addons install-prometheus install-keda install-alb install-router install-gateway sync-hf-secret build-image upload-model import-s3-models deploy-k8s delete-k8s delete-addons destroy fix-gpu lint lint-terraform load-test-slo force-unlock-terraform fix-terraform-drift fix-post-destroy
 
 TF_ENVIRONMENT ?= prod
 TF_DIR = terraform/environments/$(TF_ENVIRONMENT)
@@ -45,6 +45,14 @@ install-alb:
 	  ACM_CERTIFICATE_ARN="$(ACM_CERTIFICATE_ARN)" \
 	  INFERENCE_HOSTNAME="$(INFERENCE_HOSTNAME)" \
 	  ./scripts/apply-ingress.sh
+
+# Step 9 on dev: session/KV-aware router (+ optional LMCache). Prod enables router by default.
+install-router:
+	DEV_ENABLE_ROUTER=1 TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/apply-router.sh
+
+# Step 9 with LMCache (phase 9 cross-pod KV).
+install-gateway:
+	DEV_ENABLE_ROUTER=1 DEV_ENABLE_LMCACHE=1 TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/apply-router.sh
 
 sync-hf-secret:
 	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/sync-hf-secret.sh

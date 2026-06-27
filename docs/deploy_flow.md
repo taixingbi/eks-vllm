@@ -181,6 +181,8 @@ Optional dev shortcuts:
 make install-prometheus TF_ENVIRONMENT=dev   # Step 6
 make install-keda TF_ENVIRONMENT=dev       # Step 7 (also installs Prometheus)
 make install-alb TF_ENVIRONMENT=dev        # Step 8 (DEV_ALB_HTTP_ONLY=1 for HTTP)
+make install-router TF_ENVIRONMENT=dev     # Step 9 (DEV_ENABLE_ROUTER=1)
+make install-gateway TF_ENVIRONMENT=dev    # Step 9 + LMCache (DEV_ENABLE_LMCACHE=1)
 ```
 
 ---
@@ -217,9 +219,10 @@ make deploy-k8s TF_ENVIRONMENT=dev
 5. **NVIDIA device plugin**
 6. **ServiceAccount `vllm`** (IRSA for S3 read) — before model-seed
 7. **model-seed Job** — sync S3 → EFS on a system node (waits up to 60m)
-8. **vLLM Deployment** + Service
-9. **Ingress** — if `DEV_ENABLE_ALB=1` or prod
-10. **Monitoring / KEDA** — if respective flags set
+8. **vLLM Deployment** + Service (+ LMCache ConfigMap when `ENABLE_LMCACHE=1`)
+9. **Gateway router** — if `ENABLE_ROUTER=1` (prod always; dev `DEV_ENABLE_ROUTER=1`)
+10. **Ingress** — if `DEV_ENABLE_ALB=1` or prod (backend: `vllm-router` when router on)
+11. **Monitoring / KEDA** — if respective flags set (includes router ServiceMonitor when router + Prometheus)
 
 ### Model path at runtime
 
@@ -277,7 +280,7 @@ See README **GitHub Actions Deploy** section. Minimum:
 
 - Secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `HF_TOKEN`
 - Variables: `MODEL_VERSION` (for CI S3 check)
-- Dev optional: `DEV_ENABLE_PROMETHEUS`, `DEV_ENABLE_KEDA`, `DEV_ENABLE_ALB`, `DEV_ALB_HTTP_ONLY`
+- Dev optional: `DEV_ENABLE_PROMETHEUS`, `DEV_ENABLE_KEDA`, `DEV_ENABLE_ALB`, `DEV_ALB_HTTP_ONLY`, `DEV_ENABLE_ROUTER`, `DEV_ENABLE_LMCACHE`
 
 ---
 
@@ -293,6 +296,7 @@ See README **GitHub Actions Deploy** section. Minimum:
 | 6 | Prometheus | `DEV_ENABLE_PROMETHEUS=1` |
 | 7 | KEDA autoscale | `DEV_ENABLE_KEDA=1` |
 | 8 | ALB ingress | `DEV_ENABLE_ALB=1` (+ `DEV_ALB_HTTP_ONLY=1` for HTTP) |
+| 9 | Gateway router | prod always; dev `DEV_ENABLE_LMCACHE=1` optional — [gateway.md](gateway.md) |
 
 Details: **[design.md](design.md)**
 

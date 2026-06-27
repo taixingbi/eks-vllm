@@ -1,6 +1,6 @@
 # eks-vllm Dev Roadmap
 
-**Philosophy:** boring first, optimize later. Steps 1–5 are the minimal dev path; Steps 6–8 are optional flags. Steps 9–10 are out of scope for `dev`.
+**Philosophy:** boring first, optimize later. Steps 1–5 are the minimal dev path; Steps 6–8 are optional flags. Step 9 (gateway) is prod-default; dev opt-in. See [gateway.md](gateway.md).
 
 ---
 
@@ -16,8 +16,9 @@
 | **6** | Prometheus | `DEV_ENABLE_PROMETHEUS=1` → `make install-prometheus TF_ENVIRONMENT=dev` |
 | **7** | KEDA | `DEV_ENABLE_KEDA=1` → `make install-keda TF_ENVIRONMENT=dev` (auto-enables Prometheus) |
 | **8** | ALB | `DEV_ENABLE_ALB=1` → `make install-alb TF_ENVIRONMENT=dev` |
-| **9** | Larger models | Override `MODEL_NAME`; use `g5.4xlarge` for 8B+ or long context |
-| **10** | Production | `main` branch → `prod` environment |
+| **9** | Gateway router | prod always; dev: `DEV_ENABLE_ROUTER=1` → [docs/gateway.md](gateway.md) |
+| **10** | Larger models | Override `MODEL_NAME`; use `g5.4xlarge` for 8B+ or long context |
+| **11** | Production | `main` branch → `prod` environment |
 
 ### Step 6 — Prometheus
 
@@ -39,7 +40,17 @@
 | HTTP (dev) | `DEV_ENABLE_ALB=1` + `DEV_ALB_HTTP_ONLY=1` | Port 80, ALB DNS — no ACM or hostname |
 | HTTPS | `DEV_ENABLE_ALB=1` + secrets `ACM_CERTIFICATE_ARN`, `INFERENCE_HOSTNAME` | Prod-style TLS |
 
-**Security note:** public ALB exposes the raw vLLM API. For prod, prefer internal ClusterIP (Route A) or ALB → LLM Gateway → vLLM (Route B). See README.
+**Security note:** public ALB exposes the raw vLLM API. For prod, prefer internal ClusterIP (Route A) or ALB → **vllm-router** → vLLM (Route B). See [gateway.md](gateway.md).
+
+### Step 9 — Gateway router (phases 0–9)
+
+| Mode | Flags | Routing |
+|------|-------|---------|
+| Dev session router | `DEV_ENABLE_ROUTER=1` | `session` |
+| Dev full gateway | `DEV_ENABLE_ROUTER=1` + `DEV_ENABLE_LMCACHE=1` | `kvaware` |
+| Prod | always on | `kvaware` + LMCache |
+
+Client header: `X-Session-Id` per conversation. Full phase map: [gateway.md](gateway.md).
 
 ### Recovery
 
@@ -62,8 +73,9 @@ Two layers: **code/CI ready** vs **validated on dev cluster**.
 | 6 | Prometheus | ✅ `DEV_ENABLE_PROMETHEUS=1` | ⚠️ Confirm `vllm:*` series in PromQL |
 | 7 | KEDA | ✅ `DEV_ENABLE_KEDA=1` + production triggers | ⚠️ Confirm ScaledObject Ready + `vllm:ttft:p95` recording rule |
 | 8 | ALB | ✅ `DEV_ENABLE_ALB=1`, `DEV_ALB_HTTP_ONLY=1` | ⚠️ Confirm `kubectl get ingress` ADDRESS + HTTP curl |
-| 9 | Larger models | ✅ `MODEL_NAME` override + auto vLLM tuning in `patch-manifests.sh` | ⚠️ 0.5B still supported via `MODEL_NAME` override |
-| 10 | Production | ❌ `main` / prod only | — not a dev goal |
+| 9 | Gateway router | ✅ prod default; `DEV_ENABLE_ROUTER=1` | ⚠️ Sticky session + KEDA multi-replica test |
+| 10 | Larger models | ✅ `MODEL_NAME` override + auto vLLM tuning in `patch-manifests.sh` | ⚠️ 0.5B still supported via `MODEL_NAME` override |
+| 11 | Production | ❌ `main` / prod only | — not a dev goal |
 
 **Legend:** ✅ done · ⚠️ partial / needs verification · ❌ not done
 
@@ -71,7 +83,7 @@ Two layers: **code/CI ready** vs **validated on dev cluster**.
 
 ## Dev Defaults (Steps 1–5 minimal path)
 
-Skipped unless flags set: ALB, KEDA, Prometheus, External Secrets, Ingress.
+Skipped unless flags set: ALB, KEDA, Prometheus, External Secrets, Ingress, Gateway router.
 
 | Setting | Dev value (7B default) |
 |---------|------------------------|

@@ -1,0 +1,143 @@
+# vLLM Production Stack router — session / prefix / KV-aware routing to GPU backends.
+# Phases 1–6, 8: routing logic via __ROUTER_ROUTING_LOGIC__ (session | prefixaware | kvaware).
+# Phase 9: LMCache controller port when __ENABLE_LMCACHE__=true.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-router
+  namespace: vllm
+  labels:
+    app: vllm-router
+spec:
+  replicas: __ROUTER_REPLICAS__
+  selector:
+    matchLabels:
+      app: vllm-router
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: vllm-router
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: vllm-router
+      terminationGracePeriodSeconds: 30
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: vllm-router
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: vllm-router
+                topologyKey: topology.kubernetes.io/zone
+      containers:
+        - name: router
+          image: __ROUTER_IMAGE__
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: PYTHONHASHSEED
+              value: "123"
+            - name: LMCACHE_LOG_LEVEL
+              value: "__LMCACHE_LOG_LEVEL__"
+          args:
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "8000"
+            - "--service-discovery"
+            - "k8s"
+            - "--k8s-namespace"
+            - "vllm"
+            - "--k8s-service-discovery-type"
+            - "pod-ip"
+            - "--k8s-label-selector"
+            - "app=vllm-qwen"
+            - "--routing-logic"
+            - "__ROUTER_ROUTING_LOGIC__"
+            - "--session-key"
+            - "__ROUTER_SESSION_KEY__"
+            - "--engine-stats-interval"
+            - "15"
+            - "--request-stats-window"
+            - "60"
+            - "--prefix-min-match-length"
+            - "__ROUTER_PREFIX_MIN_MATCH__"
+            - "--log-level"
+            - "info"
+            __ROUTER_LMCACHE_ARGS__
+            __ROUTER_EXTRA_ARGS__
+          resources:
+            requests:
+              cpu: "__ROUTER_CPU_REQUEST__"
+              memory: "__ROUTER_MEMORY_REQUEST__"
+            limits:
+              cpu: "__ROUTER_CPU_LIMIT__"
+              memory: "__ROUTER_MEMORY_LIMIT__"
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 12
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 30
+            failureThreshold: 3
+            timeoutSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-router
+  namespace: vllm
+  labels:
+    app: vllm-router
+spec:
+  type: ClusterIP
+  selector:
+    app: vllm-router
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: vllm-router
+  namespace: vllm
+spec:
+  minAvailable: __ROUTER_PDB_MIN_AVAILABLE__
+  selector:
+    matchLabels:
+      app: vllm-router

@@ -64,6 +64,8 @@ See **[docs/deploy_flow.md](docs/deploy_flow.md)** for the full deploy sequence 
 | `make install-prometheus TF_ENVIRONMENT=dev` | Step 6: slim Prometheus + vLLM metrics (after vLLM is Running) |
 | `make install-keda TF_ENVIRONMENT=dev` | Step 7: KEDA + ScaledObject (requires Step 6; also installs Prometheus) |
 | `make install-alb TF_ENVIRONMENT=dev` | Step 8: ALB Controller + Ingress (HTTP: `DEV_ALB_HTTP_ONLY=1`; HTTPS: ACM cert + hostname) |
+| `make install-router TF_ENVIRONMENT=dev` | Step 9: session/KV-aware router (requires `DEV_ENABLE_ROUTER=1`; use with KEDA for multi-replica) |
+| `make install-gateway TF_ENVIRONMENT=dev` | Step 9 + LMCache (phases 1–9): `DEV_ENABLE_ROUTER=1` + `DEV_ENABLE_LMCACHE=1` |
 | `AUTO_APPROVE=1 make delete-k8s TF_ENVIRONMENT=prod` | Remove K8s workloads (keeps cluster) |
 | `AUTO_APPROVE=1 make destroy TF_ENVIRONMENT=prod` | Delete everything for an environment |
 
@@ -105,6 +107,9 @@ Create GitHub **Environments** named `dev` and `prod` (Settings → Environments
 | `DEV_ENABLE_KEDA` | *(unset)* | Set to `1` on **dev** to enable Step 7 (KEDA + ScaledObject; also enables Prometheus) |
 | `DEV_ENABLE_ALB` | *(unset)* | Set to `1` on **dev** to enable Step 8 (ALB Controller + Ingress) |
 | `DEV_ALB_HTTP_ONLY` | *(unset)* | Set to `1` on **dev** for HTTP-only ALB on port 80 (no ACM / hostname; use ALB DNS) |
+| `DEV_ENABLE_ROUTER` | *(unset)* | Set to `1` on **dev** to enable Step 9 (session/KV-aware router; prod always on) |
+| `DEV_ENABLE_LMCACHE` | *(unset)* | Set to `1` on **dev** for LMCache cross-pod KV (phase 9; prod default when router on) |
+| `ROUTER_ROUTING_LOGIC` | *(auto)* | Override: `session`, `prefixaware`, or `kvaware` (see [docs/gateway.md](docs/gateway.md)) |
 
 Dev uses 1 Karpenter replica (single system node); prod uses 2.
 
@@ -121,6 +126,7 @@ Optional **Helm chart overrides** (unset = defaults in `scripts/lib/chart-versio
 | `KEDA_CHART_VERSION` | `2.16.1` | KEDA |
 | `EXTERNAL_SECRETS_CHART_VERSION` | `2.6.0` | External Secrets Operator |
 | `NVIDIA_DEVICE_PLUGIN_VERSION` | `0.14.5` | NVIDIA device plugin (manifest, not Helm) |
+| `VLLM_ROUTER_TAG` | `latest` | vLLM Production Stack router image tag |
 
 Bump versions in **`scripts/lib/chart-versions.sh`** (single source of truth), then re-run `install-controllers` + `install-addons`.
 
@@ -293,6 +299,44 @@ curl http://$(kubectl get ingress vllm-qwen -n vllm -o jsonpath='{.status.loadBa
 
 # HTTPS (custom hostname):
 curl https://dev.inference.example.com/v1/models
+```
+
+### Dev Step 9 — Gateway router (optional)
+
+Multi-replica **session / prefix / KV-aware routing** (phases 1–9). See **[docs/gateway.md](docs/gateway.md)** for the full phase map.
+
+**Prod** enables router + LMCache by default. **Dev** requires flags.
+
+| Mode | Flags | Routing |
+|------|-------|---------|
+| Session sticky (phase 1) | `DEV_ENABLE_ROUTER=1` | `session` + `X-Session-Id` header |
+| Full gateway (phases 1–9) | `DEV_ENABLE_ROUTER=1` + `DEV_ENABLE_LMCACHE=1` | `kvaware` |
+
+Use with **Step 7 KEDA** (2+ replicas) for cache efficiency. Router alone on 1 replica is harmless but provides no benefit.
+
+**GitHub:** set `DEV_ENABLE_ROUTER=1` (and optionally `DEV_ENABLE_LMCACHE=1`), then push or re-run Deploy.
+
+**Local:**
+
+```bash
+DEV_ENABLE_ROUTER=1 make install-router TF_ENVIRONMENT=dev
+# or full gateway:
+DEV_ENABLE_ROUTER=1 DEV_ENABLE_LMCACHE=1 make install-gateway TF_ENVIRONMENT=dev
+```
+
+**Client header (recommended for chat):**
+
+```bash
+curl -H "X-Session-Id: user-123" http://127.0.0.1:8000/v1/chat/completions ...
+```
+
+Port-forward the router (when enabled): `kubectl port-forward -n vllm svc/vllm-router 8000:8000`
+
+Verify:
+
+```bash
+kubectl get deploy,svc,pdb -n vllm -l app=vllm-router
+kubectl logs -n vllm deploy/vllm-router --tail=30
 ```
 
 ### Local teardown
@@ -588,6 +632,7 @@ make load-test-slo TF_ENVIRONMENT=prod
 | Layer | Tool | Trigger |
 |---|---|---|
 | Pods | KEDA | waiting queue, max GPU cache, TTFT p95 (see `keda-scaledobject.yaml`) |
+| Routing | Gateway router | session / prefix / KV-aware (see `docs/gateway.md`); prod always on |
 | Nodes | Karpenter | Pending pods requesting `nvidia.com/gpu` |
 
 Optional ALB fallback scaler: `kubernetes/vllm/keda-scaledobject-alb-fallback.yaml` (apply instead of primary KEDA config).

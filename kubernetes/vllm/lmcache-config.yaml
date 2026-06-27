@@ -1,0 +1,18 @@
+# LMCache configuration (Phase 9). Applied when ENABLE_LMCACHE=1.
+# Requires a vLLM build with LMCache KV connector support (see docs/gateway.md).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lmcache-config
+  namespace: vllm
+  labels:
+    app: vllm-qwen
+data:
+  lmcache.yaml: |
+    chunk_size: 256
+    local_cpu: true
+    max_local_cpu_size: 10
+    # P2P sharing across replicas (optional; tune for your network)
+    enable_p2p: true
+    p2p_host: "0.0.0.0"
+    p2p_init_ports: "30081"

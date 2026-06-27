@@ -27,6 +27,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: vllm-qwen
+                name: __INGRESS_BACKEND_SERVICE__
                 port:
                   number: 8000

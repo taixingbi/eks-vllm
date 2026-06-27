@@ -14,6 +14,10 @@ export EXTERNAL_SECRETS_CHART_VERSION="${EXTERNAL_SECRETS_CHART_VERSION:-2.6.0}"
 # Not Helm — pinned manifest image (kubernetes/gpu/nvidia-device-plugin.yaml)
 export NVIDIA_DEVICE_PLUGIN_VERSION="${NVIDIA_DEVICE_PLUGIN_VERSION:-0.14.5}"
 
+# vLLM Production Stack router (Gateway phases 1–8)
+export VLLM_ROUTER_REPOSITORY="${VLLM_ROUTER_REPOSITORY:-lmcache/lmstack-router}"
+export VLLM_ROUTER_TAG="${VLLM_ROUTER_TAG:-latest}"
+
 chart_versions_print() {
   cat <<EOF
 Pinned add-on versions (${TF_ENVIRONMENT:-unknown}):
@@ -24,5 +28,6 @@ Pinned add-on versions (${TF_ENVIRONMENT:-unknown}):
   KEDA chart:                   ${KEDA_CHART_VERSION}
   External Secrets chart:       ${EXTERNAL_SECRETS_CHART_VERSION}
   NVIDIA device plugin:         v${NVIDIA_DEVICE_PLUGIN_VERSION}
+  vLLM router image:            ${VLLM_ROUTER_REPOSITORY}:${VLLM_ROUTER_TAG}
 EOF
 }

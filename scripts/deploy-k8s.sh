@@ -71,9 +71,27 @@ if ! kubectl wait --for=condition=complete job/model-seed -n vllm --timeout=3600
   exit 1
 fi
 
+if [[ "${ENABLE_LMCACHE}" == "1" ]]; then
+  kubectl apply -f "${OUT_DIR}/vllm/lmcache-config.yaml"
+fi
+
 kubectl apply -f "${OUT_DIR}/vllm/deployment.yaml"
 kubectl -n vllm delete rs -l app=vllm-qwen --field-selector='status.replicas=0' --ignore-not-found 2>/dev/null || true
 kubectl apply -f "${OUT_DIR}/vllm/service.yaml"
+
+if [[ "${ENABLE_ROUTER}" == "1" ]]; then
+  kubectl apply -f "${OUT_DIR}/vllm/router-rbac.yaml"
+  kubectl apply -f "${OUT_DIR}/vllm/router.yaml"
+  kubectl rollout status deployment/vllm-router -n vllm --timeout=300s
+else
+  kubectl delete deployment,service,pdb vllm-router -n vllm --ignore-not-found 2>/dev/null || true
+  kubectl delete serviceaccount vllm-router -n vllm --ignore-not-found 2>/dev/null || true
+  kubectl delete role,rolebinding vllm-router -n vllm --ignore-not-found 2>/dev/null || true
+  if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
+    echo "Skipping gateway router on dev (minimal path)"
+    echo "Enable Step 9: DEV_ENABLE_ROUTER=1 make apply-router TF_ENVIRONMENT=dev"
+  fi
+fi
 
 if [[ "${ENABLE_ALB}" == "1" ]]; then
   if [[ "${ALB_HTTP_ONLY}" == "1" ]]; then

@@ -1,0 +1,20 @@
+# Scrapes vLLM router metrics (Phase 6). Requires Prometheus Operator.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: vllm-router
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames:
+      - vllm
+  selector:
+    matchLabels:
+      app: vllm-router
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s

@@ -81,12 +81,14 @@ spec:
             - name: http
               containerPort: 8000
               protocol: TCP
+            __LMCACHE_PORTS__
           env:
             - name: MODEL_PATH
               valueFrom:
                 configMapKeyRef:
                   name: vllm-config
                   key: MODEL_PATH
+            __LMCACHE_ENV__
           args:
             - --model
             - __MODEL_PATH_VALUE__
@@ -145,6 +147,7 @@ spec:
               readOnly: true
             - name: shm
               mountPath: /dev/shm
+            __LMCACHE_VOLUME_MOUNTS__
       volumes:
         - name: model-cache
           persistentVolumeClaim:
@@ -153,6 +156,7 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: __VLLM_SHM_SIZE__
+        __LMCACHE_VOLUMES__
 
 ---
 apiVersion: policy/v1

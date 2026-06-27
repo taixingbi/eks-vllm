@@ -1,0 +1,32 @@
+# RBAC for vLLM Production Stack router (K8s pod discovery in vllm namespace).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vllm-router
+  namespace: vllm
+  labels:
+    app: vllm-router
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: vllm-router
+  namespace: vllm
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vllm-router
+  namespace: vllm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: vllm-router
+subjects:
+  - kind: ServiceAccount
+    name: vllm-router
+    namespace: vllm

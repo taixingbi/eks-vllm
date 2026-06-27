@@ -47,6 +47,14 @@ if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
   PDB_MIN_AVAILABLE=0
   PRESTOP_SLEEP_SECONDS=15
   TERMINATION_GRACE_SECONDS=120
+  ROUTER_REPLICAS=1
+  ROUTER_PDB_MIN_AVAILABLE=0
+  ROUTER_CPU_REQUEST=500m
+  ROUTER_MEMORY_REQUEST=1Gi
+  ROUTER_CPU_LIMIT=1
+  ROUTER_MEMORY_LIMIT=2Gi
+  ROUTER_PREFIX_MIN_MATCH=32
+  LMCACHE_LOG_LEVEL=INFO
   if dev_model_is_large; then
     VLLM_MEMORY_REQUEST=10Gi
     VLLM_MEMORY_LIMIT=20Gi
@@ -89,9 +97,36 @@ else
   VLLM_STARTUP_FAILURE_THRESHOLD=30
   PRESTOP_SLEEP_SECONDS=30
   TERMINATION_GRACE_SECONDS=120
+  ROUTER_REPLICAS=2
+  ROUTER_PDB_MIN_AVAILABLE=1
+  ROUTER_CPU_REQUEST=1
+  ROUTER_MEMORY_REQUEST=2Gi
+  ROUTER_CPU_LIMIT=2
+  ROUTER_MEMORY_LIMIT=4Gi
+  ROUTER_PREFIX_MIN_MATCH=64
+  LMCACHE_LOG_LEVEL=WARNING
 fi
 
-# NodePool instance-size follows INSTANCE_TYPE (g5.2xlarge -> "2xlarge", g5.4xlarge -> "4xlarge").
+if [[ "${ENABLE_ROUTER}" == "1" ]]; then
+  INGRESS_BACKEND_SERVICE=vllm-router
+else
+  INGRESS_BACKEND_SERVICE=vllm-qwen
+fi
+
+if [[ "${ENABLE_LMCACHE}" == "1" ]]; then
+  ROUTER_LMCACHE_ARGS=$'            - "--lmcache-controller-port"\n            - "9000"'
+else
+  ROUTER_LMCACHE_ARGS=""
+fi
+
+# Phase 5: verbose routing logs on dev for debugging.
+if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
+  ROUTER_EXTRA_ARGS=""
+else
+  ROUTER_EXTRA_ARGS=""
+fi
+
+ROUTER_IMAGE="${VLLM_ROUTER_REPOSITORY}:${VLLM_ROUTER_TAG}"
 INSTANCE_FAMILY="${INSTANCE_TYPE%%.*}"
 INSTANCE_SIZE="${INSTANCE_TYPE#*.}"
 KARPENTER_INSTANCE_SIZES="\"${INSTANCE_SIZE}\""
@@ -141,6 +176,18 @@ patch_file() {
     -e "s|__VLLM_MAX_MODEL_LEN__|${VLLM_MAX_MODEL_LEN}|g" \
     -e "s|__VLLM_GPU_MEMORY_UTIL__|${VLLM_GPU_MEMORY_UTIL}|g" \
     -e "s|__VLLM_STARTUP_FAILURE_THRESHOLD__|${VLLM_STARTUP_FAILURE_THRESHOLD}|g" \
+    -e "s|__ROUTER_IMAGE__|${ROUTER_IMAGE}|g" \
+    -e "s|__ROUTER_REPLICAS__|${ROUTER_REPLICAS}|g" \
+    -e "s|__ROUTER_PDB_MIN_AVAILABLE__|${ROUTER_PDB_MIN_AVAILABLE}|g" \
+    -e "s|__ROUTER_ROUTING_LOGIC__|${ROUTER_ROUTING_LOGIC}|g" \
+    -e "s|__ROUTER_SESSION_KEY__|${ROUTER_SESSION_KEY}|g" \
+    -e "s|__ROUTER_PREFIX_MIN_MATCH__|${ROUTER_PREFIX_MIN_MATCH}|g" \
+    -e "s|__ROUTER_CPU_REQUEST__|${ROUTER_CPU_REQUEST}|g" \
+    -e "s|__ROUTER_MEMORY_REQUEST__|${ROUTER_MEMORY_REQUEST}|g" \
+    -e "s|__ROUTER_CPU_LIMIT__|${ROUTER_CPU_LIMIT}|g" \
+    -e "s|__ROUTER_MEMORY_LIMIT__|${ROUTER_MEMORY_LIMIT}|g" \
+    -e "s|__LMCACHE_LOG_LEVEL__|${LMCACHE_LOG_LEVEL}|g" \
+    -e "s|__INGRESS_BACKEND_SERVICE__|${INGRESS_BACKEND_SERVICE}|g" \
     -e "s|INSTANCE_FAMILY|${INSTANCE_FAMILY}|g" \
     "$src" > "$dst"
 }
@@ -151,7 +198,70 @@ patch_ingress() {
   sed \
     -e "s|ACM_CERTIFICATE_ARN|${ACM_CERTIFICATE_ARN}|g" \
     -e "s|inference.example.com|${INFERENCE_HOSTNAME}|g" \
+    -e "s|__INGRESS_BACKEND_SERVICE__|${INGRESS_BACKEND_SERVICE}|g" \
     "$src" > "$dst"
+}
+
+apply_lmcache_deployment_blocks() {
+  local dst="${OUT_DIR}/vllm/deployment.yaml"
+  python3 - "${dst}" "${ENABLE_LMCACHE}" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+enabled = sys.argv[2] == "1"
+text = path.read_text()
+
+if enabled:
+    ports = """            - name: lmcache-worker
+              containerPort: 8001
+              protocol: TCP
+            - name: lmcache-controller
+              containerPort: 9000
+              protocol: TCP"""
+    env = """            - name: LMCACHE_USE_EXPERIMENTAL
+              value: "True"
+            - name: LMCACHE_CONFIG_FILE
+              value: "/etc/lmcache/lmcache.yaml"
+            - name: LMCACHE_CONTROLLER_PORT
+              value: "9000"
+            - name: LMCACHE_WORKER_PORT
+              value: "8001"
+"""
+    volume_mounts = """            - name: lmcache-config
+              mountPath: /etc/lmcache
+              readOnly: true"""
+    volumes = """        - name: lmcache-config
+          configMap:
+            name: lmcache-config"""
+else:
+    ports = env = volume_mounts = volumes = ""
+
+for key, val in (
+    ("__LMCACHE_PORTS__", ports),
+    ("__LMCACHE_ENV__", env),
+    ("__LMCACHE_VOLUME_MOUNTS__", volume_mounts),
+    ("__LMCACHE_VOLUMES__", volumes),
+):
+    text = text.replace(key, val)
+path.write_text(text)
+PY
+}
+
+apply_router_multiline_args() {
+  local dst="${OUT_DIR}/vllm/router.yaml"
+  python3 - "${dst}" "${ROUTER_LMCACHE_ARGS}" "${ROUTER_EXTRA_ARGS}" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+lmcache_args = sys.argv[2]
+extra_args = sys.argv[3]
+text = path.read_text()
+text = text.replace("__ROUTER_LMCACHE_ARGS__", lmcache_args)
+text = text.replace("__ROUTER_EXTRA_ARGS__", extra_args)
+path.write_text(text)
+PY
 }
 
 patch_file "${ROOT}/kubernetes/karpenter/ec2nodeclass-g5.yaml" "${OUT_DIR}/karpenter/ec2nodeclass-g5.yaml"
@@ -161,6 +271,9 @@ patch_file "${ROOT}/kubernetes/karpenter/nodepool-g5-spot.yaml" "${OUT_DIR}/karp
 patch_file "${ROOT}/kubernetes/vllm/pvc-efs.yaml" "${OUT_DIR}/vllm/pvc-efs.yaml"
 patch_file "${ROOT}/kubernetes/vllm/serviceaccount.yaml" "${OUT_DIR}/vllm/serviceaccount.yaml"
 patch_file "${ROOT}/kubernetes/vllm/deployment.yaml" "${OUT_DIR}/vllm/deployment.yaml"
+apply_lmcache_deployment_blocks
+patch_file "${ROOT}/kubernetes/vllm/router.yaml" "${OUT_DIR}/vllm/router.yaml"
+apply_router_multiline_args
 patch_file "${ROOT}/kubernetes/vllm/configmap.yaml" "${OUT_DIR}/vllm/configmap.yaml"
 patch_file "${ROOT}/kubernetes/vllm/model-seed-job.yaml" "${OUT_DIR}/vllm/model-seed-job.yaml"
 patch_ingress "${ROOT}/kubernetes/vllm/ingress.yaml" "${OUT_DIR}/vllm/ingress.yaml"
@@ -168,11 +281,14 @@ patch_file "${ROOT}/kubernetes/vllm/keda-scaledobject.yaml" "${OUT_DIR}/vllm/ked
 patch_file "${ROOT}/kubernetes/monitoring/cloudwatch-agent.yaml" "${OUT_DIR}/monitoring/cloudwatch-agent.yaml"
 
 cp "${ROOT}/kubernetes/vllm/namespace.yaml" "${OUT_DIR}/vllm/"
+cp "${ROOT}/kubernetes/vllm/router-rbac.yaml" "${OUT_DIR}/vllm/"
+cp "${ROOT}/kubernetes/vllm/lmcache-config.yaml" "${OUT_DIR}/vllm/"
 cp "${ROOT}/kubernetes/vllm/service.yaml" "${OUT_DIR}/vllm/"
-cp "${ROOT}/kubernetes/vllm/ingress-http.yaml" "${OUT_DIR}/vllm/"
+patch_file "${ROOT}/kubernetes/vllm/ingress-http.yaml" "${OUT_DIR}/vllm/ingress-http.yaml"
 patch_file "${ROOT}/kubernetes/gpu/nvidia-device-plugin.yaml" "${OUT_DIR}/nvidia-device-plugin.yaml"
 cp "${ROOT}/kubernetes/monitoring/namespace.yaml" "${OUT_DIR}/monitoring/"
 cp "${ROOT}/kubernetes/monitoring/servicemonitor.yaml" "${OUT_DIR}/monitoring/"
+cp "${ROOT}/kubernetes/monitoring/servicemonitor-router.yaml" "${OUT_DIR}/monitoring/"
 cp "${ROOT}/kubernetes/monitoring/prometheus-rules.yaml" "${OUT_DIR}/monitoring/"
 
 echo "Patched manifests written to ${OUT_DIR} (${TF_ENVIRONMENT})"
@@ -190,3 +306,7 @@ echo "  VLLM_DTYPE=${VLLM_DTYPE}"
 echo "  VLLM_REPLICAS=${VLLM_REPLICAS}"
 echo "  KEDA_MIN_REPLICAS=${KEDA_MIN_REPLICAS}"
 echo "  KEDA_WAITING_THRESHOLD=${KEDA_WAITING_THRESHOLD}"
+echo "  ENABLE_ROUTER=${ENABLE_ROUTER}"
+echo "  ROUTER_ROUTING_LOGIC=${ROUTER_ROUTING_LOGIC}"
+echo "  ENABLE_LMCACHE=${ENABLE_LMCACHE}"
+echo "  INGRESS_BACKEND=${INGRESS_BACKEND_SERVICE}"

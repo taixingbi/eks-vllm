@@ -75,5 +75,33 @@ else
   export ENABLE_GRAFANA=0
 fi
 
+# Gateway router (phases 1–8): prod always; dev enables with DEV_ENABLE_ROUTER=1.
+if [[ "${TF_ENVIRONMENT}" == "prod" ]] || [[ "${DEV_ENABLE_ROUTER:-}" == "1" ]]; then
+  export ENABLE_ROUTER=1
+else
+  export ENABLE_ROUTER=0
+fi
+
+# LMCache shared KV (phase 9): prod default when router on; dev opt-in DEV_ENABLE_LMCACHE=1.
+if [[ "${ENABLE_ROUTER}" == "1" ]] && { [[ "${TF_ENVIRONMENT}" == "prod" ]] || [[ "${DEV_ENABLE_LMCACHE:-}" == "1" ]]; }; then
+  export ENABLE_LMCACHE=1
+else
+  export ENABLE_LMCACHE=0
+fi
+
+# Routing logic: session (phase 1), prefixaware (phase 8), kvaware (phase 8/9 with LMCache).
+# Override with ROUTER_ROUTING_LOGIC env var.
+if [[ -n "${ROUTER_ROUTING_LOGIC:-}" ]]; then
+  export ROUTER_ROUTING_LOGIC
+elif [[ "${ENABLE_LMCACHE}" == "1" ]]; then
+  export ROUTER_ROUTING_LOGIC=kvaware
+elif [[ "${TF_ENVIRONMENT}" == "prod" ]] && [[ "${ENABLE_ROUTER}" == "1" ]]; then
+  export ROUTER_ROUTING_LOGIC=prefixaware
+else
+  export ROUTER_ROUTING_LOGIC=session
+fi
+
+export ROUTER_SESSION_KEY="${ROUTER_SESSION_KEY:-X-Session-Id}"
+
 # shellcheck source=scripts/lib/chart-versions.sh
 source "$(dirname "${BASH_SOURCE[0]}")/chart-versions.sh"
