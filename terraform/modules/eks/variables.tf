@@ -34,7 +34,7 @@ variable "assign_public_ipv4_to_nodes" {
 variable "system_node_instance_types" {
   description = "Instance types for the system managed node group"
   type        = list(string)
-  default     = ["m6i.large"]
+  default     = ["m6i.xlarge"]
 }
 
 variable "system_node_desired_size" {

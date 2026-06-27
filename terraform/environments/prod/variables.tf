@@ -43,7 +43,7 @@ variable "single_nat_gateway" {
 variable "system_node_instance_types" {
   description = "System node instance types"
   type        = list(string)
-  default     = ["m6i.large"]
+  default     = ["m6i.xlarge"]
 }
 
 variable "system_node_desired_size" {
