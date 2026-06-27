@@ -79,10 +79,31 @@ kubectl apply -f "${OUT_DIR}/vllm/deployment.yaml"
 kubectl -n vllm delete rs -l app=vllm-qwen --field-selector='status.replicas=0' --ignore-not-found 2>/dev/null || true
 kubectl apply -f "${OUT_DIR}/vllm/service.yaml"
 
+if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
+  VLLM_ROLLOUT_TIMEOUT=2700
+else
+  VLLM_ROLLOUT_TIMEOUT=1200
+fi
+echo "Waiting for vLLM deployment before gateway router (up to ${VLLM_ROLLOUT_TIMEOUT}s)..."
+if ! kubectl rollout status deployment/vllm-qwen -n vllm --timeout="${VLLM_ROLLOUT_TIMEOUT}s"; then
+  echo "vLLM rollout failed or timed out; check GPU scheduling and model load:"
+  kubectl get pods -n vllm -l app=vllm-qwen -o wide
+  kubectl describe pod -n vllm -l app=vllm-qwen | tail -40
+  kubectl logs -n vllm -l app=vllm-qwen --tail=50 || true
+  exit 1
+fi
+
 if [[ "${ENABLE_ROUTER}" == "1" ]]; then
   kubectl apply -f "${OUT_DIR}/vllm/router-rbac.yaml"
   kubectl apply -f "${OUT_DIR}/vllm/router.yaml"
-  kubectl rollout status deployment/vllm-router -n vllm --timeout=300s
+  echo "Waiting for gateway router (requires healthy vLLM backends for /health)..."
+  if ! kubectl rollout status deployment/vllm-router -n vllm --timeout=600s; then
+    echo "Router rollout failed; diagnostics:"
+    kubectl get pods -n vllm -l app=vllm-router -o wide
+    kubectl describe pod -n vllm -l app=vllm-router | tail -40
+    kubectl logs -n vllm -l app=vllm-router --tail=80 || true
+    exit 1
+  fi
 else
   kubectl delete deployment,service,pdb vllm-router -n vllm --ignore-not-found 2>/dev/null || true
   kubectl delete serviceaccount vllm-router -n vllm --ignore-not-found 2>/dev/null || true

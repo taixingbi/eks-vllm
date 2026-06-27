@@ -67,8 +67,6 @@ spec:
             - "k8s"
             - "--k8s-namespace"
             - "vllm"
-            - "--k8s-service-discovery-type"
-            - "pod-ip"
             - "--k8s-label-selector"
             - "app=vllm-qwen"
             - "--routing-logic"
@@ -77,10 +75,7 @@ spec:
             - "__ROUTER_SESSION_KEY__"
             - "--engine-stats-interval"
             - "15"
-            - "--request-stats-window"
-            - "60"
-            - "--prefix-min-match-length"
-            - "__ROUTER_PREFIX_MIN_MATCH__"
+            __ROUTER_OPTIONAL_ARGS__
             - "--log-level"
             - "info"
             __ROUTER_LMCACHE_ARGS__
@@ -93,19 +88,19 @@ spec:
               cpu: "__ROUTER_CPU_LIMIT__"
               memory: "__ROUTER_MEMORY_LIMIT__"
           startupProbe:
-            httpGet:
-              path: /health
+            tcpSocket:
               port: http
             periodSeconds: 5
-            failureThreshold: 12
+            failureThreshold: 30
             timeoutSeconds: 3
           readinessProbe:
             httpGet:
               path: /health
               port: http
             periodSeconds: 10
-            failureThreshold: 3
-            timeoutSeconds: 3
+            failureThreshold: 6
+            timeoutSeconds: 5
+            initialDelaySeconds: 5
           livenessProbe:
             httpGet:
               path: /health

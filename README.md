@@ -126,7 +126,7 @@ Optional **Helm chart overrides** (unset = defaults in `scripts/lib/chart-versio
 | `KEDA_CHART_VERSION` | `2.16.1` | KEDA |
 | `EXTERNAL_SECRETS_CHART_VERSION` | `2.6.0` | External Secrets Operator |
 | `NVIDIA_DEVICE_PLUGIN_VERSION` | `0.14.5` | NVIDIA device plugin (manifest, not Helm) |
-| `VLLM_ROUTER_TAG` | `latest` | vLLM Production Stack router image tag |
+| `VLLM_ROUTER_TAG` | `v0.1.11` | vLLM Production Stack router image tag |
 
 Bump versions in **`scripts/lib/chart-versions.sh`** (single source of truth), then re-run `install-controllers` + `install-addons`.
 
@@ -323,6 +323,8 @@ DEV_ENABLE_ROUTER=1 make install-router TF_ENVIRONMENT=dev
 # or full gateway:
 DEV_ENABLE_ROUTER=1 DEV_ENABLE_LMCACHE=1 make install-gateway TF_ENVIRONMENT=dev
 ```
+
+**Note:** Router `/health` returns 503 until at least one vLLM backend is Ready. `deploy-k8s.sh` waits for vLLM rollout before applying the router.
 
 **Client header (recommended for chat):**
 

@@ -154,6 +154,9 @@ jobs:
           else
             kubectl rollout status deployment/vllm-qwen -n vllm --timeout=20m
           fi
+          if [[ "${DEV_ENABLE_ROUTER:-}" == "1" ]] || [[ "${TF_ENVIRONMENT}" == "prod" ]]; then
+            kubectl rollout status deployment/vllm-router -n vllm --timeout=10m
+          fi
           kubectl get pods -n vllm
           kubectl get nodes -l workload=gpu 2>/dev/null || true
 
@@ -161,7 +164,11 @@ jobs:
         if: needs.resolve-environment.outputs.environment == 'dev'
         run: |
           source ./scripts/lib/env.sh
-          kubectl port-forward -n vllm svc/vllm-qwen 8000:8000 &
+          SVC=vllm-qwen
+          if [[ "${ENABLE_ROUTER}" == "1" ]]; then
+            SVC=vllm-router
+          fi
+          kubectl port-forward -n vllm "svc/${SVC}" 8000:8000 &
           PF_PID=$!
           trap "kill ${PF_PID} 2>/dev/null || true" EXIT
           READY=false
@@ -181,4 +188,5 @@ jobs:
           curl -s http://localhost:8000/v1/models
           curl -sf http://localhost:8000/v1/chat/completions \
             -H "Content-Type: application/json" \
+            -H "X-Session-Id: ci-smoke-test" \
             -d "{\"model\":\"${MODEL_PATH}\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"max_tokens\":32}"

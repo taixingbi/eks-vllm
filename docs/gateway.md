@@ -141,6 +141,25 @@ Use with `DEV_ENABLE_KEDA=1`. Router discovers new pods automatically when KEDA 
 | `scripts/apply-router.sh` | Incremental gateway apply |
 | `scripts/lib/env.sh` | `ENABLE_ROUTER`, `ENABLE_LMCACHE`, routing logic |
 
+## Troubleshooting
+
+### Router rollout timeout
+
+The router returns **503 on `/health`** until vLLM backends are Ready (production-stack behavior). Symptoms:
+
+```
+Waiting for deployment "vllm-router" rollout to finish: 0 of 1 updated replicas are available...
+```
+
+**Fix:** Ensure vLLM pods are Running first (`kubectl get pods -n vllm -l app=vllm-qwen`). `deploy-k8s.sh` waits for vLLM before the router.
+
+If the router pod is **CrashLoopBackOff**, check logs for unrecognized CLI flags and pin `VLLM_ROUTER_TAG` (default `v0.1.11`).
+
+```bash
+kubectl logs -n vllm deploy/vllm-router --tail=80
+kubectl describe pod -n vllm -l app=vllm-router
+```
+
 ## Future phases (10–12)
 
 - **10 Multi-model:** multiple Deployments + router model aliases

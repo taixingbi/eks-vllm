@@ -16,7 +16,7 @@ export NVIDIA_DEVICE_PLUGIN_VERSION="${NVIDIA_DEVICE_PLUGIN_VERSION:-0.14.5}"
 
 # vLLM Production Stack router (Gateway phases 1–8)
 export VLLM_ROUTER_REPOSITORY="${VLLM_ROUTER_REPOSITORY:-lmcache/lmstack-router}"
-export VLLM_ROUTER_TAG="${VLLM_ROUTER_TAG:-latest}"
+export VLLM_ROUTER_TAG="${VLLM_ROUTER_TAG:-v0.1.11}"
 
 chart_versions_print() {
   cat <<EOF

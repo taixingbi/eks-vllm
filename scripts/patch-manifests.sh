@@ -119,6 +119,16 @@ else
   ROUTER_LMCACHE_ARGS=""
 fi
 
+case "${ROUTER_ROUTING_LOGIC}" in
+  prefixaware|kvaware)
+    ROUTER_OPTIONAL_ARGS=$'            - "--request-stats-window"\n            - "60"\n            - "--prefix-min-match-length"\n            - "__ROUTER_PREFIX_MIN_MATCH__"'
+    ROUTER_OPTIONAL_ARGS="${ROUTER_OPTIONAL_ARGS//__ROUTER_PREFIX_MIN_MATCH__/${ROUTER_PREFIX_MIN_MATCH}}"
+    ;;
+  *)
+    ROUTER_OPTIONAL_ARGS=""
+    ;;
+esac
+
 # Phase 5: verbose routing logs on dev for debugging.
 if [[ "${TF_ENVIRONMENT}" == "dev" ]]; then
   ROUTER_EXTRA_ARGS=""
@@ -250,16 +260,18 @@ PY
 
 apply_router_multiline_args() {
   local dst="${OUT_DIR}/vllm/router.yaml"
-  python3 - "${dst}" "${ROUTER_LMCACHE_ARGS}" "${ROUTER_EXTRA_ARGS}" <<'PY'
+  python3 - "${dst}" "${ROUTER_LMCACHE_ARGS}" "${ROUTER_EXTRA_ARGS}" "${ROUTER_OPTIONAL_ARGS}" <<'PY'
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
 lmcache_args = sys.argv[2]
 extra_args = sys.argv[3]
+optional_args = sys.argv[4]
 text = path.read_text()
 text = text.replace("__ROUTER_LMCACHE_ARGS__", lmcache_args)
 text = text.replace("__ROUTER_EXTRA_ARGS__", extra_args)
+text = text.replace("__ROUTER_OPTIONAL_ARGS__", optional_args)
 path.write_text(text)
 PY
 }
