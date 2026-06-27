@@ -141,6 +141,14 @@ jobs:
           echo "Checking ${MANIFEST} ..."
           aws s3 ls "${MANIFEST}"
 
+      - name: Validate GPU instance type
+        run: |
+          source ./scripts/lib/env.sh
+          ./scripts/patch-manifests.sh
+          echo "INSTANCE_TYPE=${INSTANCE_TYPE} → family=${INSTANCE_FAMILY} size=${INSTANCE_SIZE}"
+          grep -E 'instance-family|instance-size' -A1 \
+            "kubernetes/.generated/${TF_ENVIRONMENT}/karpenter/nodepool-g5-ondemand.yaml"
+
       - name: Deploy Kubernetes manifests
         env:
           ACM_CERTIFICATE_ARN: ${{ secrets.ACM_CERTIFICATE_ARN }}

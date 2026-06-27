@@ -37,6 +37,21 @@ export MODEL_S3_PREFIX="models/${MODEL_BASENAME}/${MODEL_VERSION}"
 export INSTANCE_FAMILY="${INSTANCE_TYPE%%.*}"
 export INSTANCE_SIZE="${INSTANCE_TYPE#*.}"
 
+# INSTANCE_TYPE drives Karpenter GPU NodePools — must be a GPU family (not system nodes like m6i.*).
+validate_gpu_instance_type() {
+  case "${INSTANCE_FAMILY}" in
+    g4|g5|g6|p3|p4|p5) return 0 ;;
+    *)
+      echo "ERROR: INSTANCE_TYPE=${INSTANCE_TYPE} is not a GPU instance type."
+      echo "  Karpenter NodePool g5-ondemand requires g5.* (dev default: g5.2xlarge, prod: g5.4xlarge)."
+      echo "  System nodes (m6i.xlarge) are configured in Terraform only — do not set INSTANCE_TYPE to m6i.*."
+      echo "  Fix GitHub Actions variable INSTANCE_TYPE or unset it to use the environment default."
+      exit 1
+      ;;
+  esac
+}
+validate_gpu_instance_type
+
 # Prod always installs Prometheus; dev enables Step 6 with DEV_ENABLE_PROMETHEUS=1.
 # KEDA (Step 7) requires Prometheus — enabling KEDA on dev also enables Prometheus.
 if [[ "${TF_ENVIRONMENT}" == "prod" ]] \

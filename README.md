@@ -100,7 +100,7 @@ Create GitHub **Environments** named `dev` and `prod` (Settings → Environments
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `INSTANCE_TYPE` | `g5.4xlarge` | GPU instance type for Karpenter node pools |
+| `INSTANCE_TYPE` | `g5.4xlarge` (prod) / `g5.2xlarge` (dev) | **GPU** instance for Karpenter (`g5.*` only — not `m6i.*` system nodes) |
 | `MODEL_NAME` | `Qwen/Qwen3-8B` (prod) / `Qwen/Qwen2.5-7B-Instruct` (dev) | HuggingFace model ID (weights + vLLM serve path) |
 | `DEV_ENABLE_PROMETHEUS` | *(unset)* | Set to `1` on **dev** to enable Step 6 (slim Prometheus + ServiceMonitor) |
 | `DEV_ENABLE_GRAFANA` | *(unset)* | Set to `1` on **dev** to enable Grafana in slim Prometheus stack (requires Step 6) |
@@ -114,6 +114,8 @@ Create GitHub **Environments** named `dev` and `prod` (Settings → Environments
 Dev uses 1 Karpenter replica (single system node); prod uses 2.
 
 Set repo-wide or **per-environment** variables under **Settings → Secrets and variables → Actions** (prefer **dev** / **prod** environments for `INSTANCE_TYPE`, `MODEL_NAME`, `DEV_ENABLE_*`).
+
+**Common mistake:** setting `INSTANCE_TYPE=m6i.xlarge` (system node size) breaks vLLM scheduling — Karpenter will require `m6i` + `nvidia.com/gpu`, which cannot match. Use `g5.2xlarge` on dev or delete the variable to use the default.
 
 Optional **Helm chart overrides** (unset = defaults in `scripts/lib/chart-versions.sh`):
 
