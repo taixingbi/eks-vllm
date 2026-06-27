@@ -62,7 +62,7 @@ count_g5_ec2_instances() {
     --filters \
       "Name=instance-state-name,Values=pending,running,stopping,stopped" \
       "Name=instance-type,Values=g5.2xlarge,g5.4xlarge,g5.8xlarge,g5.12xlarge,g5.16xlarge,g5.24xlarge,g5.48xlarge" \
-      "Name=tag:karpenter.sh/discovery,Values=${cluster_name}" \
+      "Name=tag:NodePool,Values=g5-gpu" \
     --query 'length(Reservations[].Instances[])' \
     --output text 2>/dev/null || echo "0"
 }
@@ -81,7 +81,7 @@ terminate_g5_ec2_instances() {
     --filters \
       "Name=instance-state-name,Values=pending,running,stopping,stopped" \
       "Name=instance-type,Values=g5.2xlarge,g5.4xlarge,g5.8xlarge,g5.12xlarge,g5.16xlarge,g5.24xlarge,g5.48xlarge" \
-      "Name=tag:karpenter.sh/discovery,Values=${cluster_name}" \
+      "Name=tag:NodePool,Values=g5-gpu" \
     --query 'Reservations[].Instances[].InstanceId' \
     --output text 2>/dev/null || true)
 

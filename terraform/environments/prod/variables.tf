@@ -76,6 +76,12 @@ variable "waf_managed_rules_action" {
   default     = "count"
 }
 
+variable "assign_public_ipv4_to_nodes" {
+  description = "Launch system nodes in public subnets with public IP (dev). Prod should use false (private subnets only)."
+  type        = bool
+  default     = true
+}
+
 variable "tags" {
   description = "Default tags"
   type        = map(string)

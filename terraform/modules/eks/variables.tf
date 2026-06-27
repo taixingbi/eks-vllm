@@ -26,7 +26,7 @@ variable "public_subnet_ids" {
 }
 
 variable "assign_public_ipv4_to_nodes" {
-  description = "Launch system and Karpenter nodes in public subnets with a public IPv4 address"
+  description = "Launch system managed node group in public subnets (dev). Set false for prod private system nodes."
   type        = bool
   default     = true
 }

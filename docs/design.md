@@ -61,6 +61,18 @@ Client header: `X-Session-Id` per conversation. Full phase map: [gateway.md](gat
 
 `make install-platform-gateway` installs Kong. Prod also provisions AWS WAF (managed rules in **count** mode initially).
 
+### Networking — GPU / system nodes
+
+| | dev | prod |
+|---|---|---|
+| GPU subnets (Karpenter) | public (`karpenter.sh/discovery-public`) | **private only** (`karpenter.sh/discovery-private`) |
+| GPU public IP | `associatePublicIPAddress: true` | **`false`** |
+| System node group | public subnets (default) | **private subnets** (`assign_public_ipv4_to_nodes = false`) |
+| Egress | NAT + S3 gateway endpoint | NAT (HA) + S3 gateway endpoint |
+| Public edge | optional ALB (HTTP/HTTPS) | ALB + WAF |
+
+Dev uses public GPU nodes for cost/simplicity. Prod keeps GPU and system workloads off the public internet; only the ALB is internet-facing.
+
 ### Recovery
 
 - Stale GPU nodes / NodeClaims: `make fix-gpu TF_ENVIRONMENT=dev`

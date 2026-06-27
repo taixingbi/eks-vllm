@@ -64,6 +64,12 @@ variable "system_node_max_size" {
   default     = 4
 }
 
+variable "assign_public_ipv4_to_nodes" {
+  description = "Launch system nodes in public subnets with public IP (dev). Prod should use false (private subnets only)."
+  type        = bool
+  default     = true
+}
+
 variable "tags" {
   description = "Default tags"
   type        = map(string)

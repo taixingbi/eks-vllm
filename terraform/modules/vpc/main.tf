@@ -26,13 +26,13 @@ module "vpc" {
   map_public_ip_on_launch = true
 
   public_subnet_tags = {
-    "kubernetes.io/role/elb" = 1
-    "karpenter.sh/discovery" = var.cluster_name
+    "kubernetes.io/role/elb"        = 1
+    "karpenter.sh/discovery-public" = var.cluster_name
   }
 
   private_subnet_tags = {
     "kubernetes.io/role/internal-elb" = 1
-    "karpenter.sh/discovery"          = var.cluster_name
+    "karpenter.sh/discovery-private"  = var.cluster_name
   }
 
   tags = var.tags

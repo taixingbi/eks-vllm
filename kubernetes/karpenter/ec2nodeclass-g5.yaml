@@ -1,10 +1,7 @@
-# Replace placeholders after terraform apply:
-#   CLUSTER_NAME          -> terraform output cluster_name
-#   KARPENTER_NODE_ROLE   -> terraform output karpenter_node_role_arn (name only for role)
-#   INSTANCE_PROFILE      -> terraform output karpenter_instance_profile_name
-#   SUBNET_SELECTOR       -> private subnet IDs (tagged with karpenter.sh/discovery)
-#   SECURITY_GROUP_ID     -> EKS node security group from terraform output
-#   INTERRUPTION_QUEUE    -> terraform output karpenter_interruption_queue_name
+# Patched by scripts/patch-manifests.sh from Terraform outputs.
+# GPU networking: dev uses public subnets + public IP; prod uses private subnets only.
+# Placeholders: CLUSTER_NAME, KARPENTER_NODE_ROLE_NAME,
+#   __KARPENTER_SUBNET_DISCOVERY_TAG_KEY__, __KARPENTER_ASSOCIATE_PUBLIC_IP__
 
 apiVersion: karpenter.k8s.aws/v1
 kind: EC2NodeClass
@@ -14,10 +11,10 @@ spec:
   amiSelectorTerms:
     - alias: al2023@latest
   role: KARPENTER_NODE_ROLE_NAME
-  associatePublicIPAddress: true
+  associatePublicIPAddress: __KARPENTER_ASSOCIATE_PUBLIC_IP__
   subnetSelectorTerms:
     - tags:
-        karpenter.sh/discovery: CLUSTER_NAME
+        __KARPENTER_SUBNET_DISCOVERY_TAG_KEY__: CLUSTER_NAME
   securityGroupSelectorTerms:
     - tags:
         karpenter.sh/discovery: CLUSTER_NAME
