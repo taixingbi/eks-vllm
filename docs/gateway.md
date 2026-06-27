@@ -155,6 +155,28 @@ Waiting for deployment "vllm-router" rollout to finish: 0 of 1 updated replicas 
 
 If the router pod is **CrashLoopBackOff**, check logs for unrecognized CLI flags and pin `VLLM_ROUTER_TAG` (default `v0.1.11`).
 
+### Disk pressure / ErrImagePull on system nodes
+
+The router image (`lmcache/lmstack-router`) includes PyTorch/CUDA layers (~several GB). Pulling it on system nodes with a small root volume causes:
+
+```
+Evicted: The node was low on resource: ephemeral-storage
+ErrImagePull: no space left on device
+```
+
+**Fix:**
+
+1. System nodes use **80 GiB** root volume (see `system_node_volume_size` in Terraform). Run `make apply` to roll nodes if upgrading from default 20 GiB.
+2. Router pods are pinned to `nodeSelector: role=system` (not GPU nodes).
+3. Clean up and retry:
+
+```bash
+kubectl delete pods -n vllm -l app=vllm-router --field-selector=status.phase=Failed
+# If node still has disk-pressure taint, cycle the system node (ASG) or drain + terminate
+kubectl get nodes -l role=system
+make apply-router TF_ENVIRONMENT=dev DEV_ENABLE_ROUTER=1
+```
+
 ```bash
 kubectl logs -n vllm deploy/vllm-router --tail=80
 kubectl describe pod -n vllm -l app=vllm-router

@@ -49,3 +49,10 @@ configure_kubectl() {
     --name "${cluster_name}" >/dev/null
   echo "${cluster_name}"
 }
+
+# Remove evicted/failed router pods before rollout (avoids repeated image pulls on disk-pressure nodes).
+cleanup_router_pods() {
+  echo "Cleaning up failed/evicted router pods..."
+  kubectl delete pods -n vllm -l app=vllm-router --field-selector=status.phase=Failed --ignore-not-found --wait=false 2>/dev/null || true
+  kubectl delete pods -n vllm -l app=vllm-router --field-selector=status.phase=Unknown --ignore-not-found --wait=false 2>/dev/null || true
+}

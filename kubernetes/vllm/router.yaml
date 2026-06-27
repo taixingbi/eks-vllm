@@ -29,6 +29,8 @@ spec:
     spec:
       serviceAccountName: vllm-router
       terminationGracePeriodSeconds: 30
+      nodeSelector:
+        role: system
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: topology.kubernetes.io/zone

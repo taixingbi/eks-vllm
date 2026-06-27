@@ -50,6 +50,18 @@ module "eks" {
 
       taints = []
 
+      block_device_mappings = {
+        xvda = {
+          device_name = "/dev/xvda"
+          ebs = {
+            volume_size           = var.system_node_volume_size
+            volume_type           = "gp3"
+            encrypted             = true
+            delete_on_termination = true
+          }
+        }
+      }
+
       tags = var.tags
     }
   }

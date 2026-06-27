@@ -55,6 +55,12 @@ variable "system_node_max_size" {
   default     = 4
 }
 
+variable "system_node_volume_size" {
+  description = "Root EBS volume size (GiB) for system nodes — lmstack-router image is large (PyTorch/CUDA layers)"
+  type        = number
+  default     = 80
+}
+
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)

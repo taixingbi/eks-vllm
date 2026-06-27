@@ -3,6 +3,7 @@
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/env.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/cluster.sh"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 
 if [[ "${ENABLE_ROUTER}" != "1" ]]; then
@@ -20,6 +21,7 @@ if [[ "${ENABLE_LMCACHE}" == "1" ]]; then
   kubectl apply -f "${OUT_DIR}/vllm/lmcache-config.yaml"
 fi
 
+cleanup_router_pods
 kubectl apply -f "${OUT_DIR}/vllm/router-rbac.yaml"
 kubectl apply -f "${OUT_DIR}/vllm/router.yaml"
 kubectl rollout status deployment/vllm-router -n vllm --timeout=300s

@@ -3,6 +3,7 @@
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/env.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/cluster.sh"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 
 cd "$TF_DIR"
@@ -94,6 +95,7 @@ if ! kubectl rollout status deployment/vllm-qwen -n vllm --timeout="${VLLM_ROLLO
 fi
 
 if [[ "${ENABLE_ROUTER}" == "1" ]]; then
+  cleanup_router_pods
   kubectl apply -f "${OUT_DIR}/vllm/router-rbac.yaml"
   kubectl apply -f "${OUT_DIR}/vllm/router.yaml"
   echo "Waiting for gateway router (requires healthy vLLM backends for /health)..."

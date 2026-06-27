@@ -401,7 +401,7 @@ If an environment was **never deployed**, delete/destroy exits cleanly after rep
 | Cluster | `qwen-vllm-dev` | `qwen-vllm-prod` |
 | VPC CIDR | `10.1.0.0/16` | `10.0.0.0/16` |
 | NAT gateways | 1 (single) | 2 (HA) |
-| System nodes | 1× `m6i.xlarge` | 2× `m6i.xlarge` |
+| System nodes | 1× `m6i.xlarge` (80 GiB root) | 2× `m6i.xlarge` (80 GiB root) |
 | vLLM replicas | 1 | 2 |
 | GPU instance (default) | `g5.2xlarge` (8 vCPU quota) | `g5.4xlarge` |
 | HF secret | `qwen-vllm-dev/hf-token` | `qwen-vllm/hf-token` |
