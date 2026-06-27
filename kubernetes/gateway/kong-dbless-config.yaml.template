@@ -1,5 +1,4 @@
 # Kong Gateway declarative config (DB-less). Patched by scripts/build-kong-config.sh.
-# Placeholders: __GATEWAY_RATE_LIMIT_PER_MINUTE__, __GATEWAY_MAX_BODY_MB__, __KONG_CONSUMERS_BLOCK__
 _format_version: "3.0"
 _transform: true
 
