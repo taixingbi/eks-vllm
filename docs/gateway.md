@@ -8,7 +8,7 @@ Multi-replica routing for vLLM on EKS. Phases **0–9** are implemented in this 
 |-------|------|--------|--------|
 | **0** | Baseline | Done | ALB → `vllm-qwen` Service → round-robin |
 | **1** | Session router | Implemented | `ROUTER_ROUTING_LOGIC=session`, header `X-Session-Id` |
-| **2** | Router HA | Implemented | prod: 2 replicas, PDB, anti-affinity |
+| **2** | Router HA | Implemented | prod: 2 replicas, PDB, required zone anti-affinity + `DoNotSchedule` spread |
 | **3** | Load-aware | Implemented | `--engine-stats-interval 15`, `--request-stats-window 60`; lowest-QPS fallback when no session |
 | **4** | GPU-aware | Partial | Engine stats scrape includes GPU cache / queue metrics via vLLM `/metrics` |
 | **5** | Failure handling | Implemented | Router probes; K8s discovery skips NotReady pods; client retry guidance below |

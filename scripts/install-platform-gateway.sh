@@ -50,6 +50,8 @@ KONG_HELM_ARGS=(
   --set resources.limits.cpu="${GATEWAY_CPU_LIMIT}"
   --set resources.limits.memory="${GATEWAY_MEMORY_LIMIT}"
   --set-file dblessConfig.config="${KONG_CONFIG}"
+  --set-json 'topologySpreadConstraints=[{"maxSkew":1,"topologyKey":"topology.kubernetes.io/zone","whenUnsatisfiable":"DoNotSchedule","labelSelector":{"matchLabels":{"app.kubernetes.io/name":"kong","app.kubernetes.io/component":"app","app.kubernetes.io/instance":"vllm-platform-gateway"}}}]'
+  --set-json 'affinity={"podAntiAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":[{"labelSelector":{"matchLabels":{"app.kubernetes.io/name":"kong","app.kubernetes.io/component":"app","app.kubernetes.io/instance":"vllm-platform-gateway"}},"topologyKey":"topology.kubernetes.io/zone"}]}}'
 )
 
 echo "Installing Kong platform gateway (replicas=${GATEWAY_REPLICAS})..."

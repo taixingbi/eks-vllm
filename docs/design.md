@@ -73,6 +73,8 @@ Client header: `X-Session-Id` per conversation. Full phase map: [gateway.md](gat
 
 Dev uses public GPU nodes for cost/simplicity. Prod keeps GPU and system workloads off the public internet; only the ALB is internet-facing.
 
+**AZ spread:** vLLM, router, and Kong use `topologySpreadConstraints` with `whenUnsatisfiable: DoNotSchedule` (maxSkew 1 per zone). Router and Kong (2+ replicas) also use **required** `podAntiAffinity` on zone. Karpenter must provision GPU/system capacity in multiple AZs or pods remain Pending.
+
 ### Recovery
 
 - Stale GPU nodes / NodeClaims: `make fix-gpu TF_ENVIRONMENT=dev`

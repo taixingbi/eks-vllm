@@ -11,6 +11,8 @@
 | `readinessProbe` | `/health` | `/health` | Only route traffic when healthy |
 | `preStop` sleep | 15s | 30s | Drain in-flight requests before SIGTERM |
 | `terminationGracePeriodSeconds` | 120 | 120 | Match ALB idle timeout + long generations |
+| Topology spread (zone) | `DoNotSchedule`, maxSkew 1 | same | Require balanced AZ placement; pod stays Pending until another AZ has capacity |
+| Router / Kong anti-affinity | required (zone) | same | At most one router/Kong pod per AZ when replicas ≥ 2 |
 | On-Demand NodePool weight | 100 | 100 | Baseline GPU nodes |
 | Spot NodePool weight | 10 | 10 | Burst only; interruption via Karpenter SQS |
 
@@ -47,8 +49,9 @@ For accurate TTFT p95 under load, watch Prometheus during sustained traffic (str
 
 ## Release checklist (prod)
 
-- [ ] 2+ On-Demand replicas Running across AZs
+- [ ] 2+ On-Demand replicas Running across AZs (`kubectl get pods -n vllm -o wide` — distinct zones)
 - [ ] PDB `minAvailable: 1` (use `2` when running 3+ replicas)
+- [ ] No vLLM pods Pending due to topology spread (provision GPU nodes in each AZ if needed)
 - [ ] Rolling update with `maxUnavailable: 0`
 - [ ] Prometheus SLO alerts firing dry-run / no false positives
 - [ ] `./scripts/load-test-slo.sh` pass against staging endpoint

@@ -642,6 +642,7 @@ Prod defaults (see **`docs/production-ha-slo.md`**):
 | Control | Prod value |
 |---------|------------|
 | PDB | `minAvailable: 1` (use `2` when running 3+ replicas) |
+| AZ spread | `topologySpreadConstraints` `DoNotSchedule` (vLLM, router, Kong); required zone anti-affinity on router/Kong |
 | Rolling update | `maxSurge: 1`, `maxUnavailable: 0` |
 | Probes | `startupProbe` + `readinessProbe` + `livenessProbe` on `/health` |
 | Graceful shutdown | `preStop` sleep 30s + `terminationGracePeriodSeconds: 120` |
