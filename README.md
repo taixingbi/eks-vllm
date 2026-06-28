@@ -67,6 +67,8 @@ See **[docs/deploy_flow.md](docs/deploy_flow.md)** for the full deploy sequence 
 | `make install-router TF_ENVIRONMENT=dev` | Step 9: session/KV-aware router (requires `DEV_ENABLE_ROUTER=1`; use with KEDA for multi-replica) |
 | `make install-gateway TF_ENVIRONMENT=dev` | Step 9 + LMCache (phases 1–9): `DEV_ENABLE_ROUTER=1` + `DEV_ENABLE_LMCACHE=1` |
 | `make install-platform-gateway TF_ENVIRONMENT=dev` | Step 11: Kong API gateway (requires `DEV_ENABLE_ALB=1` + `DEV_ENABLE_ROUTER=1` + `DEV_ENABLE_PLATFORM_GATEWAY=1`) |
+| `make load-test-slo TF_ENVIRONMENT=dev` | SLO load test (streaming TTFT p95); see `docs/load-test.md` |
+| `make load-test-autoscale TF_ENVIRONMENT=dev` | Sustained load + KEDA/Karpenter evidence report |
 | `AUTO_APPROVE=1 make delete-k8s TF_ENVIRONMENT=prod` | Remove K8s workloads (keeps cluster) |
 | `AUTO_APPROVE=1 make destroy TF_ENVIRONMENT=prod` | Delete everything for an environment |
 
@@ -438,8 +440,8 @@ If an environment was **never deployed**, delete/destroy exits cleanly after rep
 | Cluster | `qwen-vllm-dev` | `qwen-vllm-prod` |
 | VPC CIDR | `10.1.0.0/16` | `10.0.0.0/16` |
 | NAT gateways | 1 (single) | 2 (HA) |
-| System nodes | 1× `m6i.xlarge` (80 GiB root), public subnet | 2× `m6i.xlarge` (80 GiB root), **private subnet** |
-| GPU nodes (Karpenter) | public subnet + public IP | **private subnet, no public IP** |
+| System nodes | 1× `m6i.xlarge` (80 GiB root), **private subnet** | 2× `m6i.xlarge` (80 GiB root), **private subnet** |
+| GPU nodes (Karpenter) | **private subnet, no public IP** | **private subnet, no public IP** |
 | vLLM replicas | 2 | 2 |
 | GPU instance (default) | `g5.2xlarge` (8 vCPU quota) | `g5.4xlarge` |
 | HF secret | `qwen-vllm-dev/hf-token` | `qwen-vllm/hf-token` |
@@ -629,11 +631,21 @@ curl http://localhost:8000/v1/chat/completions \
 
 ### 6. Load test and verify autoscaling
 
-- Confirm KEDA scales replicas when **waiting queue** or **max GPU cache** exceeds thresholds (see Step 7 table)
-- Watch recording rules: `vllm:ttft:p95`, `vllm:generation_tps:sum` in Prometheus
-- Alerts: `VLLMThroughputSaturation` (queue + high tokens/sec), `VLLMThroughputStall` (queue + zero tokens/sec)
-- Confirm Karpenter launches Spot G5 nodes when pending GPU pods exist
-- Import Grafana dashboard from `kubernetes/monitoring/grafana-dashboard-vllm.json`
+```bash
+# SLO gate (streaming TTFT p95)
+make load-test-slo TF_ENVIRONMENT=dev
+
+# KEDA/Karpenter evidence (sustained load + markdown report)
+DEV_ENABLE_KEDA=1 make load-test-autoscale TF_ENVIRONMENT=dev
+```
+
+See **`docs/load-test.md`** for thresholds, Spot interruption checklist, and release gates.
+
+- KEDA triggers: waiting queue, max GPU cache, TTFT p95 (see Step 7 table)
+- Prometheus: `vllm:ttft:p95`, `vllm:generation_tps:sum`, `vllm:queue_depth:sum`
+- Alerts: `VLLMThroughputSaturation`, `VLLMThroughputStall`
+- Karpenter Spot G5 nodes when pending GPU pods exist
+- Grafana: `kubernetes/monitoring/grafana-dashboard-vllm.json`
 
 ### 7. Production HA baseline
 
@@ -654,9 +666,11 @@ Prometheus alerts: `VLLMSLO*` in `kubernetes/monitoring/prometheus-rules.yaml`
 **Load test:**
 
 ```bash
-kubectl port-forward -n vllm svc/vllm-qwen 8000:8000 &
 make load-test-slo TF_ENVIRONMENT=prod
+make load-test-autoscale TF_ENVIRONMENT=prod   # KEDA scale-up evidence
 ```
+
+Details: **`docs/load-test.md`**
 
 ## vLLM Configuration
 

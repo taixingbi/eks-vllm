@@ -107,14 +107,9 @@ else
   LMCACHE_LOG_LEVEL=WARNING
 fi
 
-# GPU nodes: prod = private subnets, no public IP; dev = public subnets (cost/simplicity).
-if [[ "${TF_ENVIRONMENT}" == "prod" ]]; then
-  KARPENTER_ASSOCIATE_PUBLIC_IP=false
-  KARPENTER_SUBNET_DISCOVERY_TAG_KEY="karpenter.sh/discovery-private"
-else
-  KARPENTER_ASSOCIATE_PUBLIC_IP=true
-  KARPENTER_SUBNET_DISCOVERY_TAG_KEY="karpenter.sh/discovery-public"
-fi
+# GPU + system nodes: private subnets only, no public IP (ALB is the only public edge).
+KARPENTER_ASSOCIATE_PUBLIC_IP=false
+KARPENTER_SUBNET_DISCOVERY_TAG_KEY="karpenter.sh/discovery-private"
 
 if [[ "${ENABLE_PLATFORM_GATEWAY}" == "1" ]]; then
   INGRESS_BACKEND_SERVICE=vllm-platform-gateway-kong-proxy

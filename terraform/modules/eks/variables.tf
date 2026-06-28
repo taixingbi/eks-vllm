@@ -26,9 +26,9 @@ variable "public_subnet_ids" {
 }
 
 variable "assign_public_ipv4_to_nodes" {
-  description = "Launch system managed node group in public subnets (dev). Set false for prod private system nodes."
+  description = "Launch system managed node group in public subnets. Default false: private subnets, no public IP on system nodes."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "system_node_instance_types" {

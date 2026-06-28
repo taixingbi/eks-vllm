@@ -1,4 +1,4 @@
-.PHONY: bootstrap init plan apply patch install-controllers install-addons install-prometheus install-keda install-alb install-router install-gateway install-platform-gateway sync-hf-secret build-image upload-model import-s3-models deploy-k8s delete-k8s delete-addons destroy fix-gpu lint lint-terraform load-test-slo force-unlock-terraform fix-terraform-drift fix-post-destroy
+.PHONY: bootstrap init plan apply patch install-controllers install-addons install-prometheus install-keda install-alb install-router install-gateway install-platform-gateway sync-hf-secret build-image upload-model import-s3-models deploy-k8s delete-k8s delete-addons destroy fix-gpu lint lint-terraform load-test-slo load-test-autoscale force-unlock-terraform fix-terraform-drift fix-post-destroy
 
 TF_ENVIRONMENT ?= prod
 TF_DIR = terraform/environments/$(TF_ENVIRONMENT)
@@ -107,6 +107,9 @@ lint-terraform:
 
 load-test-slo:
 	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/load-test-slo.sh
+
+load-test-autoscale:
+	TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/load-test-autoscale.sh
 
 force-unlock-terraform:
 	LOCK_ID="$(LOCK_ID)" TF_ENVIRONMENT=$(TF_ENVIRONMENT) ./scripts/force-unlock-terraform.sh

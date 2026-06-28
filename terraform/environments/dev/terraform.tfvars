@@ -9,7 +9,7 @@ system_node_instance_types  = ["m6i.xlarge"]
 system_node_desired_size    = 1
 system_node_min_size        = 1
 system_node_max_size        = 2
-assign_public_ipv4_to_nodes = true
+assign_public_ipv4_to_nodes = false
 
 tags = {
   Project     = "qwen-vllm"

@@ -77,9 +77,9 @@ variable "waf_managed_rules_action" {
 }
 
 variable "assign_public_ipv4_to_nodes" {
-  description = "Launch system nodes in public subnets with public IP (dev). Prod should use false (private subnets only)."
+  description = "Launch system nodes in public subnets with public IP. Set false (default) for private system nodes."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "tags" {

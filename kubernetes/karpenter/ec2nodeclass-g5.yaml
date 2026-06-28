@@ -1,5 +1,5 @@
 # Patched by scripts/patch-manifests.sh from Terraform outputs.
-# GPU networking: dev uses public subnets + public IP; prod uses private subnets only.
+# GPU networking: private subnets only, no public IP (dev and prod). Internet via ALB only.
 # Placeholders: CLUSTER_NAME, KARPENTER_NODE_ROLE_NAME,
 #   __KARPENTER_SUBNET_DISCOVERY_TAG_KEY__, __KARPENTER_ASSOCIATE_PUBLIC_IP__
 

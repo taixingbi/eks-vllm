@@ -65,13 +65,13 @@ Client header: `X-Session-Id` per conversation. Full phase map: [gateway.md](gat
 
 | | dev | prod |
 |---|---|---|
-| GPU subnets (Karpenter) | public (`karpenter.sh/discovery-public`) | **private only** (`karpenter.sh/discovery-private`) |
-| GPU public IP | `associatePublicIPAddress: true` | **`false`** |
-| System node group | public subnets (default) | **private subnets** (`assign_public_ipv4_to_nodes = false`) |
+| GPU subnets (Karpenter) | **private** (`karpenter.sh/discovery-private`) | **private** |
+| GPU public IP | **`false`** | **`false`** |
+| System node group | **private subnets** (`assign_public_ipv4_to_nodes = false`) | same |
 | Egress | NAT + S3 gateway endpoint | NAT (HA) + S3 gateway endpoint |
 | Public edge | optional ALB (HTTP/HTTPS) | ALB + WAF |
 
-Dev uses public GPU nodes for cost/simplicity. Prod keeps GPU and system workloads off the public internet; only the ALB is internet-facing.
+GPU and system workloads stay off the public internet; only the ALB is internet-facing.
 
 **AZ spread:** vLLM, router, and Kong use `topologySpreadConstraints` with `whenUnsatisfiable: DoNotSchedule` (maxSkew 1 per zone). Router and Kong (2+ replicas) also use **required** `podAntiAffinity` on zone. Karpenter must provision GPU/system capacity in multiple AZs or pods remain Pending.
 
@@ -79,6 +79,7 @@ Dev uses public GPU nodes for cost/simplicity. Prod keeps GPU and system workloa
 
 - Stale GPU nodes / NodeClaims: `make fix-gpu TF_ENVIRONMENT=dev`
 - Workflow: Actions → Reset → `fix-gpu` | `redeploy-k8s` | `reset-k8s`
+- **Private networking rollout:** after `make apply` + `make patch`, replace nodes that still have public IPs: `make fix-gpu TF_ENVIRONMENT=dev` (or delete GPU NodeClaims and cycle the system node group)
 
 ---
 
@@ -94,7 +95,7 @@ Two layers: **code/CI ready** vs **validated on dev cluster**.
 | 4 | curl | ✅ README + port-forward docs | ❌ Not confirmed end-to-end (CI model path fixed; local curl blocked by Pending) |
 | 5 | CI smoke test | ✅ `deploy.yml` rollout + smoke test | ❌ Pipeline not consistently green |
 | 6 | Prometheus | ✅ `DEV_ENABLE_PROMETHEUS=1` | ⚠️ Confirm `vllm:*` series in PromQL |
-| 7 | KEDA | ✅ `DEV_ENABLE_KEDA=1` + production triggers | ⚠️ Confirm ScaledObject Ready + `vllm:ttft:p95` recording rule |
+| 7 | KEDA | ✅ `DEV_ENABLE_KEDA=1` + production triggers | ⚠️ Run `make load-test-autoscale` for scale-up evidence |
 | 8 | ALB | ✅ `DEV_ENABLE_ALB=1`, `DEV_ALB_HTTP_ONLY=1` | ⚠️ Confirm `kubectl get ingress` ADDRESS + HTTP curl |
 | 9 | Gateway router | ✅ prod default; `DEV_ENABLE_ROUTER=1` | ⚠️ Sticky session + KEDA multi-replica test |
 | 10 | Larger models | ✅ `MODEL_NAME` override + auto vLLM tuning in `patch-manifests.sh` | ⚠️ 0.5B still supported via `MODEL_NAME` override |
@@ -162,7 +163,7 @@ CI: `.github/workflows/policy.yml` · Local: `make lint-terraform`
 | Spot interruption (SQS + Karpenter + EFS) | ✅ |
 | On-Demand preferred over Spot (NodePool weight) | ✅ |
 | SLO alerts (`VLLMSLO*`) | ✅ |
-| Load test script | ✅ `scripts/load-test-slo.sh` |
+| Load test (SLO + autoscale) | ✅ `load-test-slo.sh`, `load-test-autoscale.sh` — see `docs/load-test.md` |
 
 Details: **[production-ha-slo.md](production-ha-slo.md)**
 

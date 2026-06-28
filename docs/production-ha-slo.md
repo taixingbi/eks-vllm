@@ -40,12 +40,21 @@ Availability alerts require **kube-state-metrics** (prod full Prometheus stack; 
 
 ## Load testing
 
+**SLO gate** (streaming TTFT, client p95):
+
 ```bash
 kubectl port-forward -n vllm svc/vllm-qwen 8000:8000 &
-TF_ENVIRONMENT=prod ./scripts/load-test-slo.sh
+make load-test-slo TF_ENVIRONMENT=prod
 ```
 
-For accurate TTFT p95 under load, watch Prometheus during sustained traffic (streaming or dedicated load tool).
+**Autoscale evidence** (sustained load + replica/GPU timeline + report):
+
+```bash
+make load-test-autoscale TF_ENVIRONMENT=prod
+LOAD_TEST_REPORT=artifacts/load-test-report.md make load-test-autoscale TF_ENVIRONMENT=prod
+```
+
+Full checklist: **`docs/load-test.md`**
 
 ## Release checklist (prod)
 
@@ -54,5 +63,6 @@ For accurate TTFT p95 under load, watch Prometheus during sustained traffic (str
 - [ ] No vLLM pods Pending due to topology spread (provision GPU nodes in each AZ if needed)
 - [ ] Rolling update with `maxUnavailable: 0`
 - [ ] Prometheus SLO alerts firing dry-run / no false positives
-- [ ] `./scripts/load-test-slo.sh` pass against staging endpoint
+- [ ] `make load-test-slo TF_ENVIRONMENT=prod` pass against staging endpoint
+- [ ] `make load-test-autoscale TF_ENVIRONMENT=prod` — KEDA scale-up observed; report archived
 - [ ] Spot interruption runbook reviewed (Karpenter replaces node; EFS cache warm)
